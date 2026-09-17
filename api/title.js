@@ -12,7 +12,7 @@ export default async function handler(req, res) {
   if (!apiKey) return res.status(500).json({ error: 'Chave de API não configurada no servidor' });
 
   try {
-    const url = new URL('https:
+    const url = new URL('https://www.googleapis.com/youtube/v3/videos');
     url.searchParams.set('part', 'snippet');
     url.searchParams.set('id', videoId);
     url.searchParams.set('key', apiKey);
