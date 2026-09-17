@@ -28,10 +28,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Ar
 .topbar-logo svg{fill:white;width:17px;height:17px}
 .topbar h1{font-size:15px;font-weight:600}
 .topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
-.key-status{font-size:11.5px;padding:3px 10px;border-radius:20px;font-weight:500}
-.key-status.saved{background:var(--green);color:var(--green-t);border:1px solid var(--green-b)}
-.key-status.unsaved{background:var(--amber);color:var(--amber-t);border:1px solid var(--amber-b)}
-@media(max-width:440px){.topbar-right .key-status{display:none}}
 
 /* LAYOUT 2 COLUNAS */
 .layout{display:grid;grid-template-columns:310px 1fr;min-height:calc(100vh - 54px)}
@@ -55,18 +51,6 @@ input[type=text]:focus,input[type=password]:focus,textarea:focus{border-color:va
 textarea{resize:vertical;min-height:90px;line-height:1.5}
 .hint{font-size:11.5px;color:var(--text3);margin-top:5px;line-height:1.4}
 
-/* API KEY */
-.key-wrap{position:relative}
-.key-wrap input{padding-right:44px}
-.key-toggle{position:absolute;right:0;top:0;bottom:0;width:44px;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--text3);border-radius:0 var(--r-s) var(--r-s) 0}
-.key-toggle:hover{color:var(--text)}
-.key-save-row{display:flex;align-items:center;gap:8px;margin-top:7px}
-.btn-save-key{padding:6px 14px;font-size:12.5px;font-weight:500;background:var(--red);color:white;border:none;border-radius:var(--r-s);cursor:pointer;min-height:34px;transition:background .15s}
-.btn-save-key:hover{background:var(--red-h)}
-.btn-forget-key{padding:6px 12px;font-size:12px;background:none;color:var(--text3);border:1px solid var(--border-m);border-radius:var(--r-s);cursor:pointer;min-height:34px;transition:all .15s}
-.btn-forget-key:hover{background:var(--red-l);color:var(--red-t);border-color:var(--red-b)}
-.btn-forget-key.hidden{display:none}
-
 /* VIDEO BADGE */
 .vcb{display:inline-flex;align-items:center;gap:5px;background:var(--red-l);color:var(--red-t);border:1px solid var(--red-b);border-radius:20px;padding:3px 10px;font-size:11.5px;font-weight:500;margin-top:7px}
 
@@ -75,8 +59,6 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 .kw-row input{flex:1;min-width:0}
 .btn-add{padding:10px 14px;background:var(--red);color:white;border:none;border-radius:var(--r-s);font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;min-height:44px;transition:background .15s}
 .btn-add:hover{background:var(--red-h)}
-.btn-add:active{transform:scale(.98)}
-@media(max-width:380px){.kw-row{flex-wrap:wrap}.kw-row input,.btn-add{width:100%}}
 .tag-area{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;min-height:22px}
 .tag{display:inline-flex;align-items:center;gap:4px;background:var(--red-l);color:var(--red-t);border:1px solid var(--red-b);border-radius:20px;padding:3px 8px 3px 10px;font-size:12px}
 .tag-x{background:none;border:none;color:var(--red-t);cursor:pointer;font-size:16px;line-height:1;width:20px;height:20px;display:flex;align-items:center;justify-content:center;border-radius:50%}
@@ -96,7 +78,6 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 .action-col{display:flex;flex-direction:column;gap:7px}
 .btn-primary{width:100%;padding:13px 20px;background:var(--red);color:white;border:none;border-radius:var(--r-s);font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .15s,transform .1s;min-height:48px}
 .btn-primary:hover{background:var(--red-h)}
-.btn-primary:active{transform:scale(.98)}
 .btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
 .btn-primary svg{width:17px;height:17px;fill:white;flex-shrink:0}
 .btn-sec{width:100%;padding:11px 16px;background:var(--surface);color:var(--text);border:1px solid var(--border-m);border-radius:var(--r-s);font-size:13.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:background .15s;min-height:44px}
@@ -110,17 +91,6 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 .callout.amber{background:var(--amber);color:var(--amber-t);border:1px solid var(--amber-b)}
 .callout.red{background:var(--red-l);color:var(--red-t);border:1px solid var(--red-b);display:none}
 .callout.red.on{display:flex}
-
-/* DETAILS */
-details{margin-top:7px}
-details>summary{cursor:pointer;font-size:11.5px;color:var(--text3);padding:3px 0;user-select:none;list-style:none}
-details>summary::-webkit-details-marker{display:none}
-details>summary::before{content:"▸ "}
-details[open]>summary::before{content:"▾ "}
-.detail-body{font-size:12px;color:var(--text2);margin-top:7px;line-height:1.65}
-.detail-body a{color:var(--red)}
-.detail-body ol{padding-left:18px}
-.detail-body ol li{margin-bottom:3px}
 
 /* PROGRESS */
 .prog-card{display:none}
@@ -366,12 +336,6 @@ function onVideoInput() {
   bd.innerHTML = h+'</div>';
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('kwInput').addEventListener('keydown', e => {
-    if (e.key==='Enter') { e.preventDefault(); addKw(); }
-  });
-});
-
 function addKw() {
   const inp = document.getElementById('kwInput');
   const val = inp.value.trim().toLowerCase();
@@ -405,7 +369,7 @@ async function fetchComments(videoId, onProg) {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     for (const c of (data.comments||[])) {
-      list.push({ ...c, link:`https:
+      list.push({ ...c, link: `https://www.youtube.com/watch?v=${videoId}&lc=${c.id}` });
     }
     token = data.nextPageToken||''; page++;
     if (onProg) onProg(list.length);
@@ -602,19 +566,25 @@ function doExport() {
   showToast('Exportação iniciada');
 }
 
-function exportXlsx(headers,rows) {
-  const wb=XLSX.utils.book_new();
-  const ws=XLSX.utils.aoa_to_sheet([headers,...rows]);
-  ws['!cols']=headers.map(h=>({wch:h==='Comentário'?80:h==='Link'?60:h==='Vídeo'?40:h==='Autor'?28:18}));
-  XLSX.utils.book_append_sheet(wb,ws,'Comentários');
-  XLSX.writeFile(wb,'comentarios_youtube.xlsx');
+function exportXlsx(headers, rows) {
+  const data = [headers, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Comentários");
+  XLSX.writeFile(wb, "comentarios_youtube.xlsx");
 }
 
-function exportCsv(headers,rows) {
-  const c=[headers,...rows].map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\r\n');
-  const b=new Blob(['\uFEFF'+c],{type:'text/csv;charset=utf-8;'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='comentarios_youtube.csv';a.click();
-  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+function exportCsv(headers, rows) {
+  const data = [headers, ...rows];
+  const ws = XLSX.utils.aoa_to_sheet(data);
+  const csv = XLSX.utils.sheet_to_csv(ws);
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = "comentarios_youtube.csv";
+  a.click();
+  URL.revokeObjectURL(url);
 }
 </script>
 </body>
