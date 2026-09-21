@@ -40,7 +40,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Ar
 .card-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text3);margin-bottom:9px}
 
 input[type=text],input[type=password],textarea,select{width:100%;padding:10px 12px;font-size:16px;font-family:inherit;border:1px solid var(--border-m);border-radius:var(--r-s);background:var(--surf2);color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s;min-height:44px}
-input[type=text]:focus,input[type=password]:focus,textarea:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(204,51,0,.1);background:#fff}
+input[type=text]:focus,input[type=password]:focus,textarea:focus,select:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(204,51,0,.1);background:#fff}
 textarea{resize:vertical;min-height:90px;line-height:1.5}
 .flabel{display:block;font-size:12.5px;font-weight:500;color:var(--text2);margin-bottom:5px}
 .hint{font-size:11.5px;color:var(--text3);margin-top:5px;line-height:1.4}
@@ -234,6 +234,26 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
       </div>
     </div>
 
+    <div class="card" id="cardVideoFilters" style="display:none">
+      <div class="card-lbl">Filtros de Busca</div>
+      <label class="flabel" for="regionSelect">Região (País)</label>
+      <select id="regionSelect">
+        <option value="BR" selected>Brasil (BR)</option>
+        <option value="US">Estados Unidos (US)</option>
+        <option value="PT">Portugal (PT)</option>
+        <option value="ALL">Global / Todas</option>
+      </select>
+      <label class="flabel" for="dateSelect" style="margin-top:11px">Período de Publicação</label>
+      <select id="dateSelect">
+        <option value="ALL" selected>Qualquer data</option>
+        <option value="year">Último ano</option>
+        <option value="month">Último mês</option>
+        <option value="week">Última semana</option>
+        <option value="today">Hoje</option>
+      </select>
+      <p class="hint">Filtra os vídeos publicados recentemente no YouTube.</p>
+    </div>
+
     <div class="action-col">
       <button class="btn-primary" id="btnSearch" onclick="doSearch()">
         <svg viewBox="0 0 24 24"><path d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" stroke="white" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>
@@ -313,6 +333,7 @@ function switchTab(tab) {
   document.getElementById('panelComments').classList.toggle('active', isComments);
   document.getElementById('panelVideos').classList.toggle('active', !isComments);
   document.getElementById('cardVideoSearch').style.display = isComments ? 'none' : 'block';
+  document.getElementById('cardVideoFilters').style.display = isComments ? 'none' : 'block';
   document.getElementById('btnSearch').style.display = isComments ? 'flex' : 'none';
   document.getElementById('btnVideoSearch').style.display = isComments ? 'none' : 'flex';
   if (!isComments) {
@@ -355,13 +376,20 @@ async function doVideoSearch() {
   if (!q) { showErr('Informe uma palavra-chave para buscar vídeos.'); return; }
   hideErr();
 
+  const region = document.getElementById('regionSelect').value;
+  const dateFilter = document.getElementById('dateSelect').value;
+
   const area = document.getElementById('videoResArea');
   const btn = document.getElementById('btnVideoSearch');
   btn.disabled = true;
   area.innerHTML = '<div class="state-box"><div class="spin" style="margin:0 auto 14px;width:26px;height:26px;border-width:3px"></div>Buscando vídeos...</div>';
 
   try {
-    const res = await fetch('/api/search?q=' + encodeURIComponent(q) + '&order=' + videoOrder + '&maxResults=' + videoCount);
+    let url = '/api/search?q=' + encodeURIComponent(q) + '&order=' + videoOrder + '&maxResults=' + videoCount;
+    if (region && region !== 'ALL') url += '&regionCode=' + encodeURIComponent(region);
+    if (dateFilter && dateFilter !== 'ALL') url += '&dateFilter=' + encodeURIComponent(dateFilter);
+
+    const res = await fetch(url);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     renderVideos(data.videos || [], q);
