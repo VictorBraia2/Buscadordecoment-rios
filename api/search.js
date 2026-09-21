@@ -3,7 +3,7 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { q, order, maxResults } = req.query;
+  const { q, order, maxResults, regionCode, dateFilter } = req.query;
   if (!q || !q.trim()) return res.status(400).json({ error: 'Informe um termo de busca.' });
 
   const apiKey = process.env.YOUTUBE_API_KEY;
@@ -20,6 +20,27 @@ export default async function handler(req, res) {
     searchUrl.searchParams.set('order', sortOrder);
     searchUrl.searchParams.set('maxResults', limit);
     searchUrl.searchParams.set('key', apiKey);
+
+    if (regionCode && regionCode !== 'ALL') {
+      searchUrl.searchParams.set('regionCode', regionCode);
+      if (regionCode === 'BR') {
+        searchUrl.searchParams.set('relevanceLanguage', 'pt');
+      }
+    }
+
+    if (dateFilter && dateFilter !== 'ALL') {
+      const now = new Date();
+      if (dateFilter === 'year') {
+        now.setFullYear(now.getFullYear() - 1);
+      } else if (dateFilter === 'month') {
+        now.setMonth(now.getMonth() - 1);
+      } else if (dateFilter === 'week') {
+        now.setDate(now.getDate() - 7);
+      } else if (dateFilter === 'today') {
+        now.setDate(now.getDate() - 1);
+      }
+      searchUrl.searchParams.set('publishedAfter', now.toISOString());
+    }
 
     const searchRes  = await fetch(searchUrl.toString());
     const searchData = await searchRes.json();
