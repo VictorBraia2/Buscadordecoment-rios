@@ -31,17 +31,26 @@ export default async function handler(req, res) {
     }
 
     if (dateFilter && dateFilter !== 'ALL') {
-      const now = new Date();
-      if (dateFilter === 'year') {
-        now.setFullYear(now.getFullYear() - 1);
-      } else if (dateFilter === 'month') {
-        now.setMonth(now.getMonth() - 1);
-      } else if (dateFilter === 'week') {
-        now.setDate(now.getDate() - 7);
-      } else if (dateFilter === 'today') {
-        now.setDate(now.getDate() - 1);
+      if (/^\d{4}$/.test(dateFilter)) {
+        const year = parseInt(dateFilter, 10);
+        const publishedAfter = new Date(year, 0, 1).toISOString();
+        const publishedBefore = new Date(year, 11, 31, 23, 59, 59).toISOString();
+        
+        searchUrl.searchParams.set('publishedAfter', publishedAfter);
+        searchUrl.searchParams.set('publishedBefore', publishedBefore);
+      } else {
+        const now = new Date();
+        if (dateFilter === 'year') {
+          now.setFullYear(now.getFullYear() - 1);
+        } else if (dateFilter === 'month') {
+          now.setMonth(now.getMonth() - 1);
+        } else if (dateFilter === 'week') {
+          now.setDate(now.getDate() - 7);
+        } else if (dateFilter === 'today') {
+          now.setDate(now.getDate() - 1);
+        }
+        searchUrl.searchParams.set('publishedAfter', now.toISOString());
       }
-      searchUrl.searchParams.set('publishedAfter', now.toISOString());
     }
 
     const searchRes  = await fetch(searchUrl.toString());
