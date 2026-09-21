@@ -243,15 +243,22 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
         <option value="PT">Portugal (PT)</option>
         <option value="ALL">Global / Todas</option>
       </select>
-      <label class="flabel" for="dateSelect" style="margin-top:11px">Período de Publicação</label>
+      <label class="flabel" for="dateSelect" style="margin-top:11px">Ano de Publicação (Últimos 10 Anos)</label>
       <select id="dateSelect">
-        <option value="ALL" selected>Qualquer data</option>
-        <option value="year">Último ano</option>
-        <option value="month">Último mês</option>
-        <option value="week">Última semana</option>
-        <option value="today">Hoje</option>
+        <option value="ALL" selected>Qualquer ano (Geral)</option>
+        <option value="2026">2026</option>
+        <option value="2025">2025</option>
+        <option value="2024">2024</option>
+        <option value="2023">2023</option>
+        <option value="2022">2022</option>
+        <option value="2021">2021</option>
+        <option value="2020">2020</option>
+        <option value="2019">2019</option>
+        <option value="2018">2018</option>
+        <option value="2017">2017</option>
+        <option value="2016">2016</option>
       </select>
-      <p class="hint">Filtra os vídeos publicados recentemente no YouTube.</p>
+      <p class="hint">Filtra vídeos lançados especificamente no ano selecionado.</p>
     </div>
 
     <div class="action-col">
@@ -333,7 +340,6 @@ function switchTab(tab) {
   document.getElementById('panelComments').classList.toggle('active', isComments);
   document.getElementById('panelVideos').classList.toggle('active', !isComments);
   
-  // Esconde ou mostra os cards da lateral com base na aba ativa
   document.getElementById('cardVideosInput').style.display = isComments ? 'block' : 'none';
   document.getElementById('cardKeywords').style.display = isComments ? 'block' : 'none';
   document.getElementById('cardDisplayCols').style.display = isComments ? 'block' : 'none';
@@ -386,7 +392,7 @@ async function doVideoSearch() {
   hideErr();
 
   const region = document.getElementById('regionSelect').value;
-  const dateFilter = document.getElementById('dateSelect').value;
+  const selectedYear = document.getElementById('dateSelect').value;
 
   const area = document.getElementById('videoResArea');
   const btn = document.getElementById('btnVideoSearch');
@@ -394,11 +400,16 @@ async function doVideoSearch() {
   area.innerHTML = '<div class="state-box"><div class="spin" style="margin:0 auto 14px;width:26px;height:26px;border-width:3px"></div>Buscando vídeos...</div>';
 
   try {
-    // Pedimos um pouco mais para garantir que teremos o limite desejado após filtrar os Shorts
-    let fetchLimit = videoCount * 2;
+    let fetchLimit = videoCount * 3;
     let url = '/api/search?q=' + encodeURIComponent(q) + '&order=' + videoOrder + '&maxResults=' + fetchLimit;
     if (region && region !== 'ALL') url += '&regionCode=' + encodeURIComponent(region);
-    if (dateFilter && dateFilter !== 'ALL') url += '&dateFilter=' + encodeURIComponent(dateFilter);
+    
+    // Tratamento de ano específico (Ex: 2022) enviando o range exato para a API do YouTube
+    if (selectedYear && selectedYear !== 'ALL') {
+      const publishedAfter = `${selectedYear}-01-01T00:00:00Z`;
+      const publishedBefore = `${parseInt(selectedYear) + 1}-01-01T00:00:00Z`;
+      url += `&publishedAfter=${encodeURIComponent(publishedAfter)}&publishedBefore=${encodeURIComponent(publishedBefore)}`;
+    }
 
     const res = await fetch(url);
     const data = await res.json();
@@ -406,17 +417,17 @@ async function doVideoSearch() {
 
     let rawVideos = data.videos || [];
 
-    // Filtro rigoroso para excluir shorts (descarta se tiver URL de short, título com #shorts ou se a API marcar duração curta)
+    // Filtro rigoroso anti-shorts
     let filteredVideos = rawVideos.filter(v => {
       const urlLower = (v.url || '').toLowerCase();
       const titleLower = (v.title || '').toLowerCase();
       if (urlLower.includes('/shorts/')) return false;
       if (titleLower.includes('#shorts') || titleLower.includes('#short')) return false;
-      if (v.duration && v.duration <= 60) return false; // caso a API retorne segundos
+      if (v.duration && v.duration <= 60) return false;
       return true;
     }).slice(0, videoCount);
 
-    renderVideos(filteredVideos, q);
+    renderVideos(filteredVideos, q, selectedYear);
     showToast(filteredVideos.length + ' vídeo' + (filteredVideos.length !== 1 ? 's' : '') + ' encontrado' + (filteredVideos.length !== 1 ? 's' : ''));
   } catch(e) {
     showErr('Erro ao buscar vídeos: ' + e.message);
@@ -426,14 +437,16 @@ async function doVideoSearch() {
   }
 }
 
-function renderVideos(videos, query) {
+function renderVideos(videos, query, year) {
   const area = document.getElementById('videoResArea');
   if (!videos.length) {
-    area.innerHTML = '<div class="state-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Nenhum vídeo encontrado para "' + esc(query) + '" (shorts foram ignorados)</div>';
+    const yearMsg = year !== 'ALL' ? ` do ano ${year}` : '';
+    area.innerHTML = '<div class="state-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Nenhum vídeo encontrado para "' + esc(query) + '"' + yearMsg + ' (shorts foram ignorados)</div>';
     return;
   }
   const label = videoOrder === 'date' ? 'mais recentes' : 'mais relevantes';
-  let html = '<p class="sort-note">' + videos.length + ' vídeo' + (videos.length!==1?'s':'') + ' ' + label + ' para "<strong>' + esc(query) + '</strong>", ordenados por visualizações</p>';
+  const yearDesc = year !== 'ALL' ? ` do ano <strong>${year}</strong>` : '';
+  let html = '<p class="sort-note">' + videos.length + ' vídeo' + (videos.length!==1?'s':'') + ' ' + label + ' para "<strong>' + esc(query) + '</strong>"' + yearDesc + ', ordenados por visualizações</p>';
   html += videos.map(function(v, i) {
     return '<div class="vc">' +
       '<div class="vc-thumb">' +
