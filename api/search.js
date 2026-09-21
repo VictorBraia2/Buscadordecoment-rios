@@ -9,7 +9,7 @@ export default async function handler(req, res) {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'Chave de API não configurada no servidor.' });
 
-  const limit     = Math.min(parseInt(maxResults) || 20, 50);
+  const limit     = Math.min(parseInt(maxResults) || 50, 50);
   const sortOrder = order === 'date' ? 'date' : 'relevance';
 
   try {
