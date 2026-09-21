@@ -176,7 +176,7 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 
 <div class="layout">
   <aside class="panel-l" aria-label="Configurações">
-    <div class="card">
+    <div class="card" id="cardVideosInput">
       <div class="card-lbl">Vídeos</div>
       <label class="flabel" for="videoInput">URLs ou IDs (um por linha)</label>
       <textarea id="videoInput" placeholder="https://youtube.com/watch?v=...&#10;https://youtu.be/abc12345678&#10;xyz98765432" oninput="onVideoInput()"></textarea>
@@ -184,7 +184,7 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
       <div id="videoBadge"></div>
     </div>
 
-    <div class="card">
+    <div class="card" id="cardKeywords">
       <div class="card-lbl">Palavras-chave para filtrar</div>
       <div class="kw-row">
         <input type="text" id="kwInput" placeholder="Digite e pressione Enter..." aria-label="Adicionar palavra-chave" />
@@ -196,7 +196,7 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
       <p class="hint">Vários termos funcionam como OU. Um comentário aparece se contiver ao menos um deles.</p>
     </div>
 
-    <div class="card">
+    <div class="card" id="cardDisplayCols">
       <div class="card-lbl">Exibir nos resultados</div>
       <div class="check-cols">
         <label class="chk-item disabled" aria-disabled="true"><input type="checkbox" checked disabled> Comentário</label>
@@ -208,7 +208,7 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
       </div>
     </div>
 
-    <div class="card">
+    <div class="card" id="cardExportOpts">
       <div class="card-lbl">Exportar como</div>
       <div class="check-group">
         <label class="chk-item"><input type="checkbox" id="exp_xlsx" checked> Excel (.xlsx)</label>
@@ -332,10 +332,19 @@ function switchTab(tab) {
   document.getElementById('tabVideos').classList.toggle('active', !isComments);
   document.getElementById('panelComments').classList.toggle('active', isComments);
   document.getElementById('panelVideos').classList.toggle('active', !isComments);
+  
+  // Esconde ou mostra os cards da lateral com base na aba ativa
+  document.getElementById('cardVideosInput').style.display = isComments ? 'block' : 'none';
+  document.getElementById('cardKeywords').style.display = isComments ? 'block' : 'none';
+  document.getElementById('cardDisplayCols').style.display = isComments ? 'block' : 'none';
+  document.getElementById('cardExportOpts').style.display = isComments ? 'block' : 'none';
+
   document.getElementById('cardVideoSearch').style.display = isComments ? 'none' : 'block';
   document.getElementById('cardVideoFilters').style.display = isComments ? 'none' : 'block';
+
   document.getElementById('btnSearch').style.display = isComments ? 'flex' : 'none';
   document.getElementById('btnVideoSearch').style.display = isComments ? 'none' : 'flex';
+  
   if (!isComments) {
     document.getElementById('btnExport').classList.add('hidden');
     document.getElementById('btnClear').classList.add('hidden');
@@ -385,15 +394,30 @@ async function doVideoSearch() {
   area.innerHTML = '<div class="state-box"><div class="spin" style="margin:0 auto 14px;width:26px;height:26px;border-width:3px"></div>Buscando vídeos...</div>';
 
   try {
-    let url = '/api/search?q=' + encodeURIComponent(q) + '&order=' + videoOrder + '&maxResults=' + videoCount;
+    // Pedimos um pouco mais para garantir que teremos o limite desejado após filtrar os Shorts
+    let fetchLimit = videoCount * 2;
+    let url = '/api/search?q=' + encodeURIComponent(q) + '&order=' + videoOrder + '&maxResults=' + fetchLimit;
     if (region && region !== 'ALL') url += '&regionCode=' + encodeURIComponent(region);
     if (dateFilter && dateFilter !== 'ALL') url += '&dateFilter=' + encodeURIComponent(dateFilter);
 
     const res = await fetch(url);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    renderVideos(data.videos || [], q);
-    showToast((data.videos||[]).length + ' vídeo' + ((data.videos||[]).length !== 1 ? 's' : '') + ' encontrado' + ((data.videos||[]).length !== 1 ? 's' : ''));
+
+    let rawVideos = data.videos || [];
+
+    // Filtro rigoroso para excluir shorts (descarta se tiver URL de short, título com #shorts ou se a API marcar duração curta)
+    let filteredVideos = rawVideos.filter(v => {
+      const urlLower = (v.url || '').toLowerCase();
+      const titleLower = (v.title || '').toLowerCase();
+      if (urlLower.includes('/shorts/')) return false;
+      if (titleLower.includes('#shorts') || titleLower.includes('#short')) return false;
+      if (v.duration && v.duration <= 60) return false; // caso a API retorne segundos
+      return true;
+    }).slice(0, videoCount);
+
+    renderVideos(filteredVideos, q);
+    showToast(filteredVideos.length + ' vídeo' + (filteredVideos.length !== 1 ? 's' : '') + ' encontrado' + (filteredVideos.length !== 1 ? 's' : ''));
   } catch(e) {
     showErr('Erro ao buscar vídeos: ' + e.message);
     area.innerHTML = '<div class="state-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>Não foi possível completar a busca.</div>';
@@ -405,7 +429,7 @@ async function doVideoSearch() {
 function renderVideos(videos, query) {
   const area = document.getElementById('videoResArea');
   if (!videos.length) {
-    area.innerHTML = '<div class="state-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Nenhum vídeo encontrado para "' + esc(query) + '"</div>';
+    area.innerHTML = '<div class="state-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Nenhum vídeo encontrado para "' + esc(query) + '" (shorts foram ignorados)</div>';
     return;
   }
   const label = videoOrder === 'date' ? 'mais recentes' : 'mais relevantes';
@@ -555,7 +579,7 @@ async function fetchComments(videoId, onProg) {
     token = data.nextPageToken || '';
     page++;
     if (onProg) onProg(page, list.length);
-    if (page >= 10) break; 
+    if (page >= 10) break;
   } while (token);
   return list;
 }
