@@ -542,53 +542,50 @@ async function fetchTitle(id) {
 }
 
 async function fetchComments(videoId, onProg) {
-  const list=[]; let token=''; let page=0;
+  const list = [];
+  let token = '';
+  let page = 0;
   do {
     let url = `/api/comments?videoId=${encodeURIComponent(videoId)}`;
     if (token) url += `&pageToken=${encodeURIComponent(token)}`;
     const res = await fetch(url);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    for (const c of (data.comments||[])) {
-      list.push({ ...c, link: `https://www.youtube.com/watch?v=${videoId}&lc=${c.id}` });
-    }
-    token = data.nextPageToken||''; page++;
-    if (onProg) onProg(list.length);
-  } while (token && page<50);
+    if (data.comments) list.push(...data.comments);
+    token = data.nextPageToken || '';
+    page++;
+    if (onProg) onProg(page, list.length);
+    if (page >= 10) break; 
+  } while (token);
   return list;
 }
 
 async function doSearch() {
+  const txt = document.getElementById('videoInput').value;
+  const parsed = parseVideos(txt).filter(x => x.id);
+  if (!parsed.length) {
+    showErr('Insira ao menos uma URL ou ID de vídeo válido do YouTube.');
+    return;
+  }
   hideErr();
-  const rawVideo = document.getElementById('videoInput').value;
-  if (!rawVideo.trim()){ showErr('Informe ao menos uma URL ou ID de vídeo.'); return; }
-  const parsed = parseVideos(rawVideo);
-  const valid = parsed.filter(x => x.id);
-  if (!valid.length) { showErr('Nenhum ID ou URL de vídeo válido encontrado.'); return; }
 
-  const btnSearch = document.getElementById('btnSearch');
+  const btn = document.getElementById('btnSearch');
+  btn.disabled = true;
   const progCard = document.getElementById('progCard');
   const progList = document.getElementById('progList');
-  const resArea = document.getElementById('resArea');
-  const resHeader = document.getElementById('resHeader');
-  const pagArea = document.getElementById('pagArea');
-
-  btnSearch.disabled = true;
   progCard.classList.add('on');
   progList.innerHTML = '';
-  resArea.innerHTML = '<div class="state-box"><div class="spin" style="margin:0 auto 14px;width:26px;height:26px;border-width:3px"></div>Buscando comentários...</div>';
-  resHeader.style.display = 'none';
-  pagArea.innerHTML = '';
 
   allResults = [];
   videoTitles = {};
 
-  for (const item of valid) {
-    const rowId = 'p_' + item.id;
+  for (let i = 0; i < parsed.length; i++) {
+    const item = parsed[i];
+    const divId = 'prog_' + i;
     progList.insertAdjacentHTML('beforeend', `
-      <div class="pi" id="${rowId}">
+      <div class="pi" id="${divId}">
         <div class="pi-icon"><span class="spin"></span></div>
-        <div class="pi-lbl">Buscando: ${esc(item.id)}</div>
+        <div class="pi-lbl">Carregando vídeo ${i + 1} de ${parsed.length} (${item.id})...</div>
       </div>
     `);
 
@@ -596,68 +593,59 @@ async function doSearch() {
       const title = await fetchTitle(item.id);
       videoTitles[item.id] = title;
 
-      const comments = await fetchComments(item.id, (count) => {
-        const lbl = document.querySelector(`#${rowId} .pi-lbl`);
-        if (lbl) lbl.textContent = `${title} (${count} comentários...)`;
+      const comments = await fetchComments(item.id, (pg, count) => {
+        const el = document.getElementById(divId);
+        if (el) {
+          el.querySelector('.pi-lbl').textContent = `Vídeo: "${title}" — ${count} comentários obtidos...`;
+        }
       });
 
-      for (const c of comments) {
-        allResults.push({ ...c, videoId: item.id, videoTitle: title });
-      }
+      comments.forEach(c => {
+        c.videoId = item.id;
+        c.videoTitle = title;
+      });
 
-      const row = document.getElementById(rowId);
-      if (row) {
-        row.className = 'pi ok';
-        row.querySelector('.pi-icon').innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>';
-        const lbl = row.querySelector('.pi-lbl');
-        lbl.textContent = `${title} — ${comments.length} comentários encontrados`;
-      }
+      allResults.push(...comments);
+      document.getElementById(divId).className = 'pi ok';
+      document.getElementById(divId).querySelector('.pi-icon').innerHTML = '✓';
+      document.getElementById(divId).querySelector('.pi-lbl').textContent = `Concluído: "${title}" (${comments.length} comentários)`;
     } catch (e) {
-      const row = document.getElementById(rowId);
-      if (row) {
-        row.className = 'pi err';
-        row.querySelector('.pi-icon').innerHTML = '<span>⚠</span>';
-        const lbl = row.querySelector('.pi-lbl');
-        lbl.textContent = `${item.id}: ${e.message}`;
-      }
+      document.getElementById(divId).className = 'pi err';
+      document.getElementById(divId).querySelector('.pi-icon').innerHTML = '✕';
+      document.getElementById(divId).querySelector('.pi-lbl').textContent = `Erro no vídeo ${item.id}: ${e.message}`;
     }
   }
 
-  btnSearch.disabled = false;
-  processResults();
+  btn.disabled = false;
+  applyInline();
+  if (allResults.length > 0) {
+    document.getElementById('btnExport').classList.remove('hidden');
+    document.getElementById('btnClear').classList.remove('hidden');
+    showToast(`Busca finalizada! ${allResults.length} comentários encontrados.`);
+  } else {
+    showToast('Nenhum comentário encontrado para os vídeos informados.');
+  }
 }
 
-function processResults() {
-  const inlineVal = (document.getElementById('searchInline').value || '').trim().toLowerCase();
-
-  displayed = allResults.filter(item => {
+function applyInline() {
+  const query = (document.getElementById('searchInline').value || '').toLowerCase().trim();
+  
+  displayed = allResults.filter(c => {
     if (keywords.length > 0) {
-      const text = (item.textOriginal || '').toLowerCase();
-      const matchAnyKw = keywords.some(k => text.includes(k));
-      if (!matchAnyKw) return false;
+      const matchKw = keywords.some(k => c.text.toLowerCase().includes(k));
+      if (!matchKw) return false;
     }
-    if (inlineVal) {
-      const text = (item.textOriginal || '').toLowerCase();
-      const author = (item.authorDisplayName || '').toLowerCase();
-      const title = (item.videoTitle || '').toLowerCase();
-      if (!text.includes(inlineVal) && !author.includes(inlineVal) && !title.includes(inlineVal)) {
-        return false;
-      }
+    if (query) {
+      const matchInline = c.text.toLowerCase().includes(query) || 
+                          c.author.toLowerCase().includes(query) || 
+                          c.videoTitle.toLowerCase().includes(query);
+      if (!matchInline) return false;
     }
     return true;
   });
 
   currentPage = 1;
   renderResults();
-  
-  if (allResults.length > 0) {
-    document.getElementById('btnExport').classList.remove('hidden');
-    document.getElementById('btnClear').classList.remove('hidden');
-  }
-}
-
-function applyInline() {
-  processResults();
 }
 
 function renderResults() {
@@ -666,17 +654,32 @@ function renderResults() {
   const badgeCount = document.getElementById('badgeCount');
   const pagArea = document.getElementById('pagArea');
 
-  resHeader.style.display = 'block';
-  badgeCount.textContent = `${displayed.length} resultado${displayed.length !== 1 ? 's' : ''}`;
-
-  if (!displayed.length) {
-    resArea.innerHTML = '<div class="state-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Nenhum comentário encontrado com os filtros atuais.</div>';
+  if (allResults.length === 0) {
+    resHeader.style.display = 'none';
+    resArea.innerHTML = `
+      <div class="state-box">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Configure os campos ao lado e clique em <strong>Buscar comentários</strong>
+      </div>
+    `;
     pagArea.innerHTML = '';
     return;
   }
 
+  resHeader.style.display = 'block';
+  badgeCount.textContent = `${displayed.length} resultado${displayed.length !== 1 ? 's' : ''}`;
+
+  if (displayed.length === 0) {
+    resArea.innerHTML = '<div class="state-box">Nenhum comentário corresponde aos filtros aplicados.</div>';
+    pagArea.innerHTML = '';
+    return;
+  }
+
+  const totalPages = Math.ceil(displayed.length / PAGE_SIZE);
+  if (currentPage > totalPages) currentPage = totalPages;
+
   const start = (currentPage - 1) * PAGE_SIZE;
-  const pageItems = displayed.slice(start, start + PAGE_SIZE);
+  const slice = displayed.slice(start, start + PAGE_SIZE);
 
   const showVideo = document.getElementById('chk_video').checked;
   const showAuthor = document.getElementById('chk_author').checked;
@@ -684,113 +687,85 @@ function renderResults() {
   const showLikes = document.getElementById('chk_likes').checked;
   const showLink = document.getElementById('chk_link').checked;
 
-  let html = '';
-  for (const item of pageItems) {
-    html += '<div class="rcard">';
-    
-    if (showVideo) {
-      html += `<div class="vtag" title="${esc(item.videoTitle)}"><svg viewBox="0 0 24 24"><path d="M23 7s-.3-2-1.2-2.8C20.7 3 19.4 3 18.8 2.9 16.2 2.8 12 2.8 12 2.8s-4.2 0-6.8.1C4.6 3 3.3 3 2.2 4.2 1.3 5 1 7 1 7S.7 9.3.7 11.5v2.1c0 2.2.3 4.4.3 4.4s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.3 22.2 12 22.2 12 22.2s4.2 0 6.8-.3c.6-.1 1.9-.1 3-1.3.9-.8 1.2-2.8 1.2-2.8s.3-2.2.3-4.4v-2.1C23.3 9.3 23 7 23 7zm-13.8 8.9V8.1l8.1 3.9-8.1 3.9z"/></svg>${esc(item.videoTitle)}</div>`;
-    }
+  resArea.innerHTML = slice.map(c => {
+    return `
+      <div class="rcard">
+        ${showVideo ? `<div class="vtag"><svg viewBox="0 0 24 24"><path d="M23 7s-.3-2-1.2-2.8C20.7 3 19.4 3 18.8 2.9 16.2 2.8 12 2.8 12 2.8s-4.2 0-6.8.1C4.6 3 3.3 3 2.2 4.2 1.3 5 1 7 1 7S.7 9.3.7 11.5v2.1c0 2.2.3 4.4.3 4.4s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.3 22.2 12 22.2 12 22.2s4.2 0 6.8-.3c.6-.1 1.9-.1 3-1.3.9-.8 1.2-2.8 1.2-2.8s.3-2.2.3-4.4v-2.1C23.3 9.3 23 7 23 7zm-13.8 8.9V8.1l8.1 3.9-8.1 3.9z"/></svg>${esc(c.videoTitle)}</div>` : ''}
+        <div class="rmeta">
+          ${showAuthor ? `<div class="avatar">${initials(c.author)}</div><span class="author">${esc(c.author)}</span>` : ''}
+          ${showDate && c.date ? `<span class="rdate">${fmtDate(c.date)}</span>` : ''}
+        </div>
+        <div class="rbody">${highlight(c.text, keywords)}</div>
+        <div class="rfoot">
+          ${showLikes && c.likes !== undefined ? `<span class="likes"><svg viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg>${c.likes}</span>` : ''}
+          ${showLink && c.url ? `<a class="rlink" href="${esc(c.url)}" target="_blank" rel="noopener">Ver no YouTube <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>` : ''}
+        </div>
+      </div>
+    `;
+  }).join('');
 
-    html += '<div class="rmeta">';
-    if (showAuthor) {
-      html += `<div class="avatar">${initials(item.authorDisplayName)}</div>`;
-      html += `<div class="author">${esc(item.authorDisplayName || 'Anônimo')}</div>`;
-    }
-    if (showDate && item.publishedAt) {
-      html += `<div class="rdate">${fmtDate(item.publishedAt)}</div>`;
-    }
-    html += '</div>';
-
-    html += `<div class="rbody">${highlight(item.textOriginal || '', keywords)}</div>`;
-
-    if (showLikes || showLink) {
-      html += '<div class="rfoot">';
-      if (showLikes) {
-        html += `<div class="likes"><svg viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg>${item.likeCount || 0}</div>`;
+  if (totalPages > 1) {
+    let pagHtml = `<button class="pag-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">Anterior</button>`;
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+        pagHtml += `<button class="pag-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
+      } else if (i === currentPage - 3 || i === currentPage + 3) {
+        pagHtml += `<span class="pag-info">...</span>`;
       }
-      if (showLink && item.link) {
-        html += `<a class="rlink" href="${esc(item.link)}" target="_blank" rel="noopener">Ver no YouTube <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>`;
-      }
-      html += '</div>';
     }
-
-    html += '</div>';
-  }
-
-  resArea.innerHTML = html;
-  renderPagination();
-}
-
-function renderPagination() {
-  const pagArea = document.getElementById('pagArea');
-  const totalPages = Math.ceil(displayed.length / PAGE_SIZE);
-  if (totalPages <= 1) {
+    pagHtml += `<button class="pag-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">Próxima</button>`;
+    pagArea.innerHTML = pagHtml;
+  } else {
     pagArea.innerHTML = '';
-    return;
   }
-
-  let html = `<button class="pag-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">Anterior</button>`;
-  html += `<span class="pag-info">Página ${currentPage} de ${totalPages}</span>`;
-  html += `<button class="pag-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">Próxima</button>`;
-  
-  pagArea.innerHTML = html;
 }
 
 function changePage(p) {
   currentPage = p;
   renderResults();
-  document.getElementById('resArea').scrollIntoView({ behavior: 'smooth' });
+  document.getElementById('panelComments').scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function clearAll() {
   allResults = [];
   displayed = [];
-  document.getElementById('videoInput').value = '';
-  document.getElementById('videoBadge').innerHTML = '';
-  document.getElementById('resArea').innerHTML = `
-    <div class="state-box">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      Configure os campos ao lado e clique em <strong>Buscar comentários</strong>
-    </div>`;
-  document.getElementById('resHeader').style.display = 'none';
-  document.getElementById('pagArea').innerHTML = '';
+  currentPage = 1;
   document.getElementById('progCard').classList.remove('on');
+  document.getElementById('progList').innerHTML = '';
   document.getElementById('btnExport').classList.add('hidden');
   document.getElementById('btnClear').classList.add('hidden');
-  hideErr();
-  showToast('Resultados limpos.');
+  renderResults();
+  showToast('Resultados limpos com sucesso.');
 }
 
 function doExport() {
-  if (!displayed.length) {
-    showErr('Não há resultados para exportar.');
+  if (displayed.length === 0) {
+    showToast('Não há dados para exportar.');
     return;
   }
 
   const exportXlsx = document.getElementById('exp_xlsx').checked;
   const exportCsv = document.getElementById('exp_csv').checked;
 
-  const dataRows = displayed.map(item => ({
-    'Vídeo': item.videoTitle || '',
-    'Autor': item.authorDisplayName || '',
-    'Data': fmtDate(item.publishedAt),
-    'Curtidas': item.likeCount || 0,
-    'Comentário': item.textOriginal || '',
-    'Link': item.link || ''
+  const dataRows = displayed.map(c => ({
+    'Vídeo': c.videoTitle || '',
+    'ID do Vídeo': c.videoId || '',
+    'Autor': c.author || '',
+    'Comentário': c.text || '',
+    'Data': c.date ? fmtDate(c.date) : '',
+    'Curtidas': c.likes || 0,
+    'Link': c.url || ''
   }));
 
   const ws = XLSX.utils.json_to_sheet(dataRows);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Comentários');
 
-  const dateStr = new Date().toISOString().slice(0, 10);
-
   if (exportXlsx) {
-    XLSX.writeFile(wb, `comentarios_youtube_${dateStr}.xlsx`);
+    XLSX.writeFile(wb, 'comentarios_youtube.xlsx');
   }
-  if (exportCsv) {
-    XLSX.writeFile(wb, `comentarios_youtube_${dateStr}.csv`, { bookType: 'csv' });
+  if (exportCsv || (!exportXlsx && !exportCsv)) {
+    XLSX.writeFile(wb, 'comentarios_youtube.csv', { bookType: 'csv' });
   }
 
   showToast('Exportação concluída com sucesso!');
