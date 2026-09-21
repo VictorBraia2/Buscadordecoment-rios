@@ -1,65 +1,63 @@
-Buscador de Comentários — YouTube
+YouTube Comment Finder
 
-Ferramenta web para buscar e filtrar comentários de vídeos do YouTube por palavras-chave, com exportação para Excel e CSV.
-
-O que faz
-
-Você cola um ou mais links de vídeos do YouTube, define os termos que quer encontrar nos comentários e o sistema retorna tudo que bate com esses termos. Os resultados aparecem na tela com os termos destacados, e você pode exportar para Excel ou CSV com um clique.
-
-Funciona em celular, tablet e computador. Não precisa instalar nada.
-
-Estrutura do projeto
-
-
-├── index.html          # interface completa (HTML + CSS + JS em um arquivo só)
-├── vercel.json         # configuração de roteamento e headers
-└── api/
-    ├── comments.js     # busca os comentários via YouTube Data API v3
-    └── title.js        # busca o título do vídeo
-    
-O frontend nunca fala direto com o YouTube. Ele chama as funções em `/api`, que rodam no servidor do Vercel. A chave de API fica nas variáveis de ambiente do Vercel e nunca chega ao navegador.
-
-Como publicar no Vercel
-
-1. Obtenha uma chave de API do YouTube**
-
-Acesse o [Google Cloud Console](https://console.cloud.google.com), crie um projeto, ative a **YouTube Data API v3** e gere uma chave em Credenciais.
-
-2. Faça o deploy
-
-Entre em [vercel.com](https://vercel.com), clique em **Add New > Project**, faça upload do `.zip` com os arquivos e, antes de publicar, adicione a variável de ambiente:
-
-YOUTUBE_API_KEY=sua_chave_aqui
-
-Clique em **Deploy**. Em menos de um minuto o sistema estará no ar com um link público.
-
-3. Atualizações futuras
-
-Para atualizar sem criar um novo projeto, acesse **Deployments**, clique nos três pontos ao lado do deploy mais recente e escolha Redeploy.
-
-Observação importante
-
-O sistema não funciona se você abrir o arquivo `index.html` direto do computador. O navegador bloqueia as chamadas para a API por questões de segurança (CORS). Ele precisa estar publicado em um servidor com HTTPS para funcionar corretamente.
+Ferramenta web para buscar, filtrar e exportar comentários de vídeos do YouTube por palavras-chave. Desenvolvida em HTML e JavaScript puro com um backend seguro em Vercel Serverless Functions.
 
 Funcionalidades
 
-- Busca em um ou vários vídeos ao mesmo tempo
-- Aceita URL completa, link curto (youtu.be) ou ID de 11 caracteres
-- Filtro por palavras-chave com destaque visual nos resultados
-- Filtro adicional dentro dos resultados já carregados
-- Progresso individual por vídeo durante a busca
-- Paginação dos resultados (25 por página)
-- Exportação para Excel (.xlsx) e CSV com as colunas que você escolher
-- Layout responsivo para celular, tablet e computador
-- Chave de API protegida no servidor, invisível para o usuário final
+Busca Multi-vídeo: Insira um ou vários links de vídeos do YouTube simultaneamente.
+Filtros por Palavras-chave: Localize termos específicos nos comentários com destaque visual automático nos resultados.
+Filtro em Tempo Real: Refine os dados já carregados instantaneamente.
+Exportação: Baixe os resultados filtrados em formatos Excel (.xlsx) ou CSV, selecionando as colunas desejadas.
+Segurança: A chave da API do YouTube permanece isolada no servidor, sem exposição no navegador.
+Responsividade: Compatível com dispositivos móveis, tablets e computadores, sem necessidade de instalação.
 
-Tecnologias
+ Estrutura do Projeto
 
-- HTML, CSS e JavaScript puro (sem frameworks)
-- [SheetJS](https://sheetjs.com) para exportação Excel, carregado via CDN
-- Vercel Functions (Node.js) para o backend
-- YouTube Data API v3
+O frontend estático comunica-se exclusivamente com funções de servidor protegidas:
 
-Cota da API
+text
 
-A cota gratuita do Google é de **10.000 unidades por dia**. Cada página de 100 comentários consome aproximadamente 1 unidade. Para uso moderado, a cota gratuita é mais do que suficiente.
+├── index.html        # Interface completa (HTML, CSS e Vanilla JS)
+├── vercel.json       # Configuração de roteamento e headers
+└── api/
+    ├── comments.js   # Intermediação com a YouTube Data API v3
+    └── title.js      # Recuperação do título dos vídeos
+Nota de Segurança: O frontend não realiza requisições diretas para o YouTube. As chamadas passam por /api, executadas no ambiente do Vercel onde a chave de API é mantida em variáveis de ambiente.
+
+Tecnologias Utilizadas
+Frontend: HTML5, CSS3 e JavaScript (Vanilla)
+
+Manipulação de Planilhas: SheetJS (XLSX) via CDN
+
+Backend: Vercel Serverless Functions (Node.js)
+
+API Externa: YouTube Data API v3
+
+Como Publicar no Vercel
+O projeto requer suporte a Serverless Functions para operar as rotas de API (/api). Abrir o arquivo index.html diretamente no navegador resulta em bloqueio de CORS.
+
+Passos para o Deploy:
+Obtenha uma Chave de API:
+
+Acesse o Google Cloud Console.
+
+Crie um projeto, ative a YouTube Data API v3 e gere uma chave de credencial.
+
+Realize o Deploy:
+
+Acesse vercel.com.
+
+Clique em Add New > Project e envie os arquivos do projeto.
+
+Configure a seguinte variável de ambiente antes de finalizar:
+
+YOUTUBE_API_KEY = sua_chave_de_api_aqui
+
+Clique em Deploy.
+
+Para atualizações futuras, acesse a aba Deployments no Vercel e selecione Redeploy.
+
+Limitações e Cota da API
+A cota padrão gratuita da YouTube Data API v3 é de 10.000 unidades diárias.
+
+Cada lote de até 100 comentários consome aproximadamente 1 unidade, sendo adequada para uso moderado.
