@@ -9,11 +9,10 @@ export default async function handler(req, res) {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'Chave de API não configurada no servidor.' });
 
-  const limit = Math.min(parseInt(maxResults) || 20, 50);
+  const limit     = Math.min(parseInt(maxResults) || 20, 50);
   const sortOrder = order === 'date' ? 'date' : 'relevance';
 
   try {
-    // 1. Buscar vídeos por palavra-chave
     const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
     searchUrl.searchParams.set('part', 'snippet');
     searchUrl.searchParams.set('q', q.trim());
@@ -22,23 +21,21 @@ export default async function handler(req, res) {
     searchUrl.searchParams.set('maxResults', limit);
     searchUrl.searchParams.set('key', apiKey);
 
-    const searchRes = await fetch(searchUrl.toString());
+    const searchRes  = await fetch(searchUrl.toString());
     const searchData = await searchRes.json();
     if (searchData.error) return res.status(400).json({ error: searchData.error.message });
 
     const items = searchData.items || [];
     if (!items.length) return res.status(200).json({ videos: [] });
 
-    // 2. Buscar estatísticas dos vídeos encontrados
-    const ids = items.map(i => i.id.videoId).join(',');
+    const ids      = items.map(i => i.id.videoId).join(',');
     const statsUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
-    statsUrl.searchParams.set('part', 'statistics,snippet');
+    statsUrl.searchParams.set('part', 'statistics');
     statsUrl.searchParams.set('id', ids);
     statsUrl.searchParams.set('key', apiKey);
 
-    const statsRes = await fetch(statsUrl.toString());
+    const statsRes  = await fetch(statsUrl.toString());
     const statsData = await statsRes.json();
-    if (statsData.error) return res.status(400).json({ error: statsData.error.message });
 
     const statsMap = {};
     for (const item of (statsData.items || [])) {
@@ -55,18 +52,17 @@ export default async function handler(req, res) {
       const st = statsMap[id] || { views: 0, likes: 0, comments: 0 };
       return {
         id,
-        title:        s.title,
-        channel:      s.channelTitle,
-        publishedAt:  s.publishedAt,
-        thumbnail:    s.thumbnails?.medium?.url || s.thumbnails?.default?.url || '',
-        views:        st.views,
-        likes:        st.likes,
-        comments:     st.comments,
-        url:          `https://www.youtube.com/watch?v=${id}`,
+        title:       s.title,
+        channel:     s.channelTitle,
+        publishedAt: s.publishedAt,
+        thumbnail:   s.thumbnails?.medium?.url || s.thumbnails?.default?.url || '',
+        views:       st.views,
+        likes:       st.likes,
+        comments:    st.comments,
+        url:         `https://www.youtube.com/watch?v=${id}`,
       };
     });
 
-    // Ordenar por visualizações decrescente
     videos.sort((a, b) => b.views - a.views);
 
     return res.status(200).json({ videos });
