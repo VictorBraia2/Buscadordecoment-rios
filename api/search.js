@@ -9,7 +9,9 @@ export default async function handler(req, res) {
   const apiKey = process.env.YOUTUBE_API_KEY;
   if (!apiKey) return res.status(500).json({ error: 'Chave de API não configurada no servidor.' });
 
-  const limit     = Math.min(parseInt(maxResults) || 50, 50);
+  const requestedLimit = parseInt(maxResults) || 20;
+  const searchLimit = Math.max(requestedLimit, 50);
+  
   const sortOrder = order === 'date' ? 'date' : 'relevance';
 
   try {
@@ -18,7 +20,7 @@ export default async function handler(req, res) {
     searchUrl.searchParams.set('q', q.trim());
     searchUrl.searchParams.set('type', 'video');
     searchUrl.searchParams.set('order', sortOrder);
-    searchUrl.searchParams.set('maxResults', limit);
+    searchUrl.searchParams.set('maxResults', searchLimit);
     searchUrl.searchParams.set('key', apiKey);
 
     if (regionCode && regionCode !== 'ALL') {
@@ -67,7 +69,7 @@ export default async function handler(req, res) {
       };
     }
 
-    const videos = items.map(item => {
+    let videos = items.map(item => {
       const id = item.id.videoId;
       const s  = item.snippet;
       const st = statsMap[id] || { views: 0, likes: 0, comments: 0 };
@@ -85,6 +87,7 @@ export default async function handler(req, res) {
     });
 
     videos.sort((a, b) => b.views - a.views);
+    videos = videos.slice(0, requestedLimit);
 
     return res.status(200).json({ videos });
   } catch (e) {
