@@ -5,7 +5,135 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta name="description" content="Busque e filtre comentários de vídeos do YouTube por palavras-chave. Exporta para Excel e CSV.">
 <title>Buscador de Comentários — YouTube</title>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js">
+let videoOrder  = 'relevance';
+let videoCount  = 20;
+
+function switchTab(tab) {
+  const isComments = tab === 'comments';
+  document.getElementById('tabComments').classList.toggle('active', isComments);
+  document.getElementById('tabVideos').classList.toggle('active', !isComments);
+  document.getElementById('panelComments').classList.toggle('active', isComments);
+  document.getElementById('panelVideos').classList.toggle('active', !isComments);
+
+  document.getElementById('videoSearchCard').style.display = isComments ? 'none' : 'block';
+  document.getElementById('btnVideoSearch').style.display  = isComments ? 'none' : 'flex';
+  document.getElementById('btnSearch').style.display       = isComments ? 'flex' : 'none';
+
+  const commentOnlyEls = ['btnExport','btnClear'];
+  commentOnlyEls.forEach(id => {
+    const el = document.getElementById(id);
+    if (!isComments) el.classList.add('hidden');
+  });
+}
+
+function setOrder(order) {
+  videoOrder = order;
+  document.getElementById('orderRel').classList.toggle('active',  order === 'relevance');
+  document.getElementById('orderDate').classList.toggle('active', order === 'date');
+}
+
+function setCount(n) {
+  videoCount = n;
+  document.querySelectorAll('.count-opt').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.textContent) === n);
+  });
+}
+
+function fmtNum(n) {
+  if (n >= 1e9) return (n/1e9).toFixed(1).replace('.0','') + ' bi';
+  if (n >= 1e6) return (n/1e6).toFixed(1).replace('.0','') + ' mi';
+  if (n >= 1e3) return (n/1e3).toFixed(1).replace('.0','') + ' mil';
+  return String(n);
+}
+
+function sendToComments(url) {
+  const ta = document.getElementById('videoInput');
+  const current = ta.value.trim();
+  ta.value = current ? current + '\n' + url : url;
+  onVideoInput();
+  switchTab('comments');
+  showToast('Vídeo adicionado ao campo de busca de comentários');
+}
+
+async function doVideoSearch() {
+  const q = document.getElementById('videoQuery').value.trim();
+  if (!q) { showErr('Informe uma palavra-chave para buscar vídeos.'); return; }
+
+  const area = document.getElementById('videoResArea');
+  const btn  = document.getElementById('btnVideoSearch');
+  btn.disabled = true;
+  area.innerHTML = `<div class="state-box"><div class="spin" style="margin:0 auto 12px;width:24px;height:24px;border-width:3px"></div>Buscando vídeos...</div>`;
+
+  try {
+    const res  = await fetch(`/api/search?q=${encodeURIComponent(q)}&order=${videoOrder}&maxResults=${videoCount}`);
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+    renderVideos(data.videos || [], q);
+    showToast(`${(data.videos||[]).length} vídeos encontrados`);
+  } catch(e) {
+    showErr('Erro ao buscar vídeos: ' + e.message);
+    area.innerHTML = `<div class="state-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>Não foi possível completar a busca. Verifique o termo e tente novamente.</div>`;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderVideos(videos, query) {
+  const area = document.getElementById('videoResArea');
+  if (!videos.length) {
+    area.innerHTML = `<div class="state-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>Nenhum vídeo encontrado para "<strong>${esc(query)}</strong>"</div>`;
+    return;
+  }
+
+  const label = videoOrder === 'date' ? 'mais recentes' : 'mais relevantes';
+  let html = `<p class="sort-info">${videos.length} vídeo${videos.length!==1?'s':''} ${label} para "<strong>${esc(query)}</strong>", ordenados por visualizações</p>`;
+
+  html += videos.map((v, i) => `
+    <div class="vcard">
+      <div class="vcard-thumb">
+        <img src="${esc(v.thumbnail)}" alt="${esc(v.title)}" loading="lazy" />
+        <span class="vcard-rank">#${i+1}</span>
+      </div>
+      <div class="vcard-body">
+        <div class="vcard-title">${esc(v.title)}</div>
+        <div class="vcard-channel">${esc(v.channel)}</div>
+        <div class="vcard-stats">
+          <span class="vstat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            ${fmtNum(v.views)}
+          </span>
+          <span class="vstat">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg>
+            ${fmtNum(v.likes)}
+          </span>
+          <span class="vstat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            ${fmtNum(v.comments)}
+          </span>
+        </div>
+        <div class="vcard-actions">
+          <button class="vcard-btn primary" onclick="sendToComments('${esc(v.url)}')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            Buscar comentários
+          </button>
+          <a class="vcard-btn" href="${esc(v.url)}" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="12" height="12"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+            Abrir no YouTube
+          </a>
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  area.innerHTML = html;
+}
+
+document.getElementById('videoQuery') && document.getElementById('videoQuery').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doVideoSearch();
+});
+
+</script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
@@ -144,6 +272,43 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
 /* TOAST */
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#1A1A18;color:white;padding:10px 20px;border-radius:24px;font-size:13px;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,.3);z-index:999;opacity:0;transition:transform .28s,opacity .28s;pointer-events:none;white-space:nowrap}
 .toast.on{transform:translateX(-50%) translateY(0);opacity:1}
+
+/* ABAS */
+.tabs{display:flex;gap:3px;padding:0 1.1rem;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:54px;z-index:90}
+.tab-btn{padding:11px 16px;font-size:13px;font-weight:500;color:var(--text3);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all .15s;white-space:nowrap}
+.tab-btn:hover{color:var(--text)}
+.tab-btn.active{color:var(--red);border-bottom-color:var(--red)}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* BUSCA DE VÍDEOS — painel esquerdo */
+.search-order{display:flex;gap:6px;margin-top:8px}
+.order-btn{flex:1;padding:8px 10px;font-size:12.5px;background:var(--surf2);color:var(--text2);border:1px solid var(--border-m);border-radius:var(--r-s);cursor:pointer;text-align:center;transition:all .15s;min-height:36px}
+.order-btn.active{background:var(--red);color:white;border-color:var(--red);font-weight:600}
+.order-btn:hover:not(.active){background:var(--red-l);color:var(--red-t);border-color:var(--red-b)}
+.count-sel{display:flex;gap:5px;margin-top:8px;flex-wrap:wrap}
+.count-opt{padding:5px 12px;font-size:12px;background:var(--surf2);color:var(--text2);border:1px solid var(--border-m);border-radius:20px;cursor:pointer;transition:all .15s;min-height:30px}
+.count-opt.active{background:var(--red);color:white;border-color:var(--red);font-weight:600}
+
+/* CARDS DE VÍDEO */
+.vcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:10px;box-shadow:var(--sh);transition:box-shadow .15s;display:flex;gap:0}
+.vcard:hover{box-shadow:var(--sh-m)}
+.vcard-thumb{width:140px;flex-shrink:0;position:relative;overflow:hidden;background:#000}
+.vcard-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.vcard-rank{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.72);color:white;font-size:11px;font-weight:700;padding:2px 7px;border-radius:20px}
+.vcard-body{flex:1;padding:10px 12px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.vcard-title{font-size:13.5px;font-weight:600;line-height:1.4;color:var(--text);word-break:break-word}
+.vcard-channel{font-size:12px;color:var(--text3)}
+.vcard-stats{display:flex;gap:12px;flex-wrap:wrap}
+.vstat{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2)}
+.vstat svg{width:13px;height:13px;flex-shrink:0}
+.vcard-actions{display:flex;gap:6px;margin-top:auto;flex-wrap:wrap}
+.vcard-btn{padding:5px 10px;font-size:12px;border-radius:var(--r-xs);cursor:pointer;border:1px solid var(--border-m);background:var(--surf2);color:var(--text);text-decoration:none;display:inline-flex;align-items:center;gap:4px;transition:all .15s;white-space:nowrap}
+.vcard-btn:hover{background:var(--red-l);color:var(--red-t);border-color:var(--red-b)}
+.vcard-btn.primary{background:var(--red);color:white;border-color:var(--red)}
+.vcard-btn.primary:hover{background:var(--red-h)}
+@media(max-width:500px){.vcard{flex-direction:column}.vcard-thumb{width:100%;height:160px}}
+.sort-info{font-size:11.5px;color:var(--text3);margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -207,9 +372,28 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
       </div>
     </div>
 
+    <!-- BUSCA DE VÍDEOS -->
+    <div class="card" id="videoSearchCard" style="display:none">
+      <div class="card-lbl">Busca de vídeos virais</div>
+      <label class="flabel" for="videoQuery">Palavra-chave</label>
+      <input type="text" id="videoQuery" placeholder="Ex: inteligência artificial, copa do mundo..." />
+      <p class="hint">Busca os vídeos mais relevantes do YouTube para o termo informado, ordenados por visualizações.</p>
+      <div class="flabel" style="margin-top:10px;margin-bottom:0">Ordenar busca por</div>
+      <div class="search-order">
+        <button class="order-btn active" id="orderRel" onclick="setOrder('relevance')">Relevância</button>
+        <button class="order-btn" id="orderDate" onclick="setOrder('date')">Mais recentes</button>
+      </div>
+      <div class="flabel" style="margin-top:10px;margin-bottom:0">Quantidade de resultados</div>
+      <div class="count-sel">
+        <button class="count-opt" onclick="setCount(10)">10</button>
+        <button class="count-opt active" onclick="setCount(20)">20</button>
+        <button class="count-opt" onclick="setCount(50)">50</button>
+      </div>
+    </div>
+
     <!-- BOTÕES DE AÇÃO -->
     <div class="action-col">
-      <button class="btn-primary" id="btnSearch" onclick="doSearch()">
+      <button class="btn-primary" id="btnSearch" onclick="doSearch()" style="display:flex">
         <svg viewBox="0 0 24 24"><path d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" stroke="white" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>
         Buscar comentários
       </button>
@@ -219,6 +403,10 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
       </button>
       <button class="btn-ghost hidden" id="btnClear" onclick="clearAll()">
         Limpar resultados
+      </button>
+      <button class="btn-primary hidden" id="btnVideoSearch" onclick="doVideoSearch()" style="display:none">
+        <svg viewBox="0 0 24 24"><path d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" stroke="white" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>
+        Buscar vídeos
       </button>
     </div>
 
@@ -236,33 +424,49 @@ textarea{resize:vertical;min-height:90px;line-height:1.5}
   </aside>
 
   <!-- PAINEL DIREITO -->
-  <main class="panel-r" aria-label="Resultados">
+  <main aria-label="Resultados" style="display:flex;flex-direction:column;min-height:calc(100vh - 54px)">
 
-    <!-- PROGRESSO -->
-    <div class="card prog-card" id="progCard" style="margin-bottom:.9rem">
-      <div class="card-lbl">Progresso da busca</div>
-      <div class="prog-list" id="progList"></div>
+    <!-- ABAS -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('comments')" id="tabComments">Comentários</button>
+      <button class="tab-btn" onclick="switchTab('videos')" id="tabVideos">Buscar vídeos virais</button>
     </div>
 
-    <!-- CABEÇALHO RESULTADOS -->
-    <div id="resHeader" style="display:none">
-      <div class="res-top">
-        <h2>Resultados</h2>
-        <span class="badge" id="badgeCount"></span>
-        <input type="text" class="inline-search" id="searchInline" placeholder="Filtrar resultados..." oninput="applyInline()" aria-label="Filtrar resultados exibidos" />
+    <!-- ABA: COMENTÁRIOS -->
+    <div class="tab-panel active panel-r" id="panelComments">
+
+      <div class="card prog-card" id="progCard" style="margin-bottom:.9rem">
+        <div class="card-lbl">Progresso da busca</div>
+        <div class="prog-list" id="progList"></div>
+      </div>
+
+      <div id="resHeader" style="display:none">
+        <div class="res-top">
+          <h2>Resultados</h2>
+          <span class="badge" id="badgeCount"></span>
+          <input type="text" class="inline-search" id="searchInline" placeholder="Filtrar resultados..." oninput="applyInline()" aria-label="Filtrar resultados exibidos" />
+        </div>
+      </div>
+
+      <div id="resArea">
+        <div class="state-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Configure os campos ao lado e clique em <strong>Buscar comentários</strong>
+        </div>
+      </div>
+
+      <div class="pag" id="pagArea"></div>
+    </div>
+
+    <!-- ABA: VÍDEOS VIRAIS -->
+    <div class="tab-panel panel-r" id="panelVideos">
+      <div id="videoResArea">
+        <div class="state-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          Use os campos ao lado para buscar vídeos virais do YouTube
+        </div>
       </div>
     </div>
-
-    <!-- LISTA -->
-    <div id="resArea">
-      <div class="state-box">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        Configure os campos ao lado e clique em <strong>Buscar comentários</strong>
-      </div>
-    </div>
-
-    <!-- PAGINAÇÃO -->
-    <div class="pag" id="pagArea"></div>
 
   </main>
 </div>
