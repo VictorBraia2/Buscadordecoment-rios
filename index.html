@@ -3,411 +3,294 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="Busque e filtre comentários de vídeos do YouTube por palavras-chave. Exporta para Excel e CSV.">
-<title>Buscador de Comentários — YouTube</title>
+<title>Buscador de Comentários & Vídeos — Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: { sans: ['Inter', 'sans-serif'] },
+        colors: { brand: { 50: '#fef2f2', 100: '#fee2e2', 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c' } }
+      }
+    }
+  }
+</script>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --red:#CC3300;--red-h:#A82900;--red-l:#FFF0EE;--red-b:#FFCBC4;--red-t:#7A1500;
-  --amber:#FFFBEB;--amber-b:#F59E0B;--amber-t:#78350F;
-  --green:#ECFDF5;--green-b:#10B981;--green-t:#065F46;
-  --bg:#F4F4F2;--surface:#FFFFFF;--surf2:#FAFAF8;
-  --border:rgba(0,0,0,0.08);--border-m:rgba(0,0,0,0.15);
-  --text:#1A1A18;--text2:#4A4A47;--text3:#8A8A86;
-  --r:12px;--r-s:8px;--r-xs:5px;
-  --sh:0 1px 3px rgba(0,0,0,0.06),0 1px 2px rgba(0,0,0,0.04);
-  --sh-m:0 4px 16px rgba(0,0,0,0.10);
-}
-html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;line-height:1.5;-webkit-font-smoothing:antialiased}
-
-.topbar{position:sticky;top:0;z-index:100;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid var(--border);height:54px;display:flex;align-items:center;padding:0 1.25rem;gap:11px}
-.topbar-logo{width:30px;height:30px;background:var(--red);border-radius:7px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.topbar-logo svg{fill:white;width:17px;height:17px}
-.topbar h1{font-size:15px;font-weight:600}
-.topbar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
-
-.layout{display:grid;grid-template-columns:310px 1fr;min-height:calc(100vh - 54px)}
-@media(max-width:840px){.layout{grid-template-columns:1fr}}
-
-.panel-l{border-right:1px solid var(--border);background:var(--surface);padding:1.1rem;overflow-y:auto;display:flex;flex-direction:column;gap:.9rem}
-@media(max-width:840px){.panel-l{border-right:none;border-bottom:1px solid var(--border)}}
-
-.panel-r{padding:1.1rem;background:var(--bg);overflow-y:auto}
-
-.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:.95rem 1.05rem;box-shadow:var(--sh)}
-.card-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.09em;color:var(--text3);margin-bottom:9px}
-
-input[type=text],input[type=password],textarea,select{width:100%;padding:10px 12px;font-size:16px;font-family:inherit;border:1px solid var(--border-m);border-radius:var(--r-s);background:var(--surf2);color:var(--text);outline:none;transition:border-color .15s,box-shadow .15s;min-height:44px}
-input[type=text]:focus,input[type=password]:focus,textarea:focus,select:focus{border-color:var(--red);box-shadow:0 0 0 3px rgba(204,51,0,.1);background:#fff}
-textarea{resize:vertical;min-height:90px;line-height:1.5}
-.flabel{display:block;font-size:12.5px;font-weight:500;color:var(--text2);margin-bottom:5px}
-.hint{font-size:11.5px;color:var(--text3);margin-top:5px;line-height:1.4}
-
-.vcb{display:inline-flex;align-items:center;gap:5px;background:var(--red-l);color:var(--red-t);border:1px solid var(--red-b);border-radius:20px;padding:3px 10px;font-size:11.5px;font-weight:500;margin-top:7px}
-
-.kw-row{display:flex;gap:7px}
-.kw-row input{flex:1;min-width:0}
-.btn-add{padding:10px 14px;background:var(--red);color:white;border:none;border-radius:var(--r-s);font-size:13px;font-weight:500;cursor:pointer;white-space:nowrap;min-height:44px;transition:background .15s}
-.btn-add:hover{background:var(--red-h)}
-.tag-area{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px;min-height:22px}
-.tag{display:inline-flex;align-items:center;gap:4px;background:var(--red-l);color:var(--red-t);border:1px solid var(--red-b);border-radius:20px;padding:3px 8px 3px 10px;font-size:12px}
-.tag-x{background:none;border:none;color:var(--red-t);cursor:pointer;font-size:16px;line-height:1;width:20px;height:20px;display:flex;align-items:center;justify-content:center;border-radius:50%}
-.tag-x:hover{background:var(--red-b)}
-.tag-empty{font-size:12px;color:var(--text3);padding:3px 0}
-
-.check-group{display:flex;flex-direction:column;gap:1px}
-.chk-item{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--text);padding:6px 4px;cursor:pointer;border-radius:var(--r-xs);transition:background .1s}
-.chk-item:hover{background:var(--surf2)}
-.chk-item input[type=checkbox]{accent-color:var(--red);width:16px;height:16px;cursor:pointer;flex-shrink:0;min-height:unset}
-.chk-item.disabled{opacity:.4;cursor:not-allowed}
-.chk-item.disabled:hover{background:none}
-.check-cols{display:grid;grid-template-columns:1fr 1fr;gap:0 8px}
-
-.action-col{display:flex;flex-direction:column;gap:7px}
-.btn-primary{width:100%;padding:13px 20px;background:var(--red);color:white;border:none;border-radius:var(--r-s);font-size:15px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:background .15s,transform .1s;min-height:48px}
-.btn-primary:hover{background:var(--red-h)}
-.btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none}
-.btn-primary svg{width:17px;height:17px;fill:white;flex-shrink:0}
-.btn-sec{width:100%;padding:11px 16px;background:var(--surface);color:var(--text);border:1px solid var(--border-m);border-radius:var(--r-s);font-size:13.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:background .15s;min-height:44px}
-.btn-sec:hover{background:var(--surf2)}
-.btn-sec.hidden,.btn-ghost.hidden{display:none}
-.btn-ghost{width:100%;padding:9px 16px;background:none;color:var(--text3);border:1px solid var(--border);border-radius:var(--r-s);font-size:12.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;min-height:40px}
-.btn-ghost:hover{background:var(--red-l);color:var(--red-t);border-color:var(--red-b)}
-
-.callout{border-radius:var(--r-s);padding:9px 12px;font-size:12px;line-height:1.5;display:flex;gap:8px;align-items:flex-start}
-.callout.amber{background:var(--amber);color:var(--amber-t);border:1px solid var(--amber-b)}
-.callout.red{background:var(--red-l);color:var(--red-t);border:1px solid var(--red-b);display:none}
-.callout.red.on{display:flex}
-
-.prog-card{display:none}
-.prog-card.on{display:block}
-.prog-list{display:flex;flex-direction:column;gap:5px;margin-top:4px}
-.pi{display:flex;align-items:flex-start;gap:8px;font-size:12.5px;color:var(--text2);padding:6px 9px;border-radius:var(--r-xs);background:var(--surf2)}
-.pi.ok{background:var(--green);color:var(--green-t)}
-.pi.err{background:var(--red-l);color:var(--red-t)}
-.pi-icon{flex-shrink:0;margin-top:1px;width:14px;display:flex;align-items:center;justify-content:center}
-.pi-lbl{word-break:break-word;flex:1}
-.spin{width:13px;height:13px;border:2px solid #E0DED8;border-top-color:var(--red);border-radius:50%;animation:spin .75s linear infinite;display:inline-block}
-@keyframes spin{to{transform:rotate(360deg)}}
-
-.res-top{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-.res-top h2{font-size:14px;font-weight:600}
-.badge{display:inline-flex;align-items:center;background:var(--red-l);color:var(--red-t);border-radius:20px;padding:2px 10px;font-size:11.5px;font-weight:500}
-.inline-search{padding:7px 10px;font-size:14px;min-height:unset;width:180px;border-radius:var(--r-s);margin-left:auto}
-@media(max-width:480px){.inline-search{width:100%;margin-left:0}}
-
-.rcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:12px 14px;margin-bottom:7px;box-shadow:var(--sh);transition:box-shadow .15s}
-.rcard:hover{box-shadow:var(--sh-m)}
-.vtag{display:inline-flex;align-items:center;gap:4px;background:var(--red-l);color:var(--red-t);border:1px solid var(--red-b);border-radius:4px;padding:2px 8px;font-size:11px;font-weight:500;margin-bottom:7px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.vtag svg{width:10px;height:10px;fill:var(--red);flex-shrink:0}
-.rmeta{display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap}
-.avatar{width:28px;height:28px;border-radius:50%;background:var(--red-l);color:var(--red-t);display:flex;align-items:center;justify-content:center;font-size:10.5px;font-weight:700;flex-shrink:0}
-.author{font-size:12.5px;font-weight:500}
-.rdate{font-size:11px;color:var(--text3);margin-left:auto}
-.rbody{font-size:13.5px;line-height:1.6;margin-bottom:7px;word-break:break-word;overflow-wrap:anywhere}
-.rbody mark{background:#FDE68A;color:#78350F;border-radius:2px;padding:0 2px}
-.rfoot{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
-.likes{font-size:12px;color:var(--text3);display:flex;align-items:center;gap:4px}
-.likes svg{width:12px;height:12px;fill:var(--text3)}
-.rlink{font-size:12px;color:var(--red);text-decoration:none;display:flex;align-items:center;gap:3px}
-.rlink:hover{text-decoration:underline}
-.rlink svg{width:11px;height:11px;fill:var(--red)}
-
-.state-box{text-align:center;padding:3rem 1rem;color:var(--text3);font-size:13.5px}
-.state-box svg{display:block;margin:0 auto 12px;opacity:.2;width:40px;height:40px}
-
-.pag{display:flex;align-items:center;justify-content:center;gap:5px;margin-top:14px;flex-wrap:wrap}
-.pag-btn{padding:7px 12px;font-size:13px;background:var(--surface);color:var(--text);border:1px solid var(--border-m);border-radius:var(--r-s);cursor:pointer;transition:background .12s;min-height:36px}
-.pag-btn:hover{background:var(--surf2)}
-.pag-btn.active{background:var(--red);color:white;border-color:var(--red);font-weight:600}
-.pag-btn:disabled{opacity:.35;cursor:not-allowed}
-.pag-info{font-size:11.5px;color:var(--text3)}
-
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(80px);background:#1A1A18;color:white;padding:10px 20px;border-radius:24px;font-size:13px;font-weight:500;box-shadow:0 4px 20px rgba(0,0,0,.3);z-index:999;opacity:0;transition:transform .28s,opacity .28s;pointer-events:none;white-space:nowrap}
-.toast.on{transform:translateX(-50%) translateY(0);opacity:1}
-
-.tabs{display:flex;gap:2px;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:54px;z-index:90;padding:0 1.1rem}
-.tab-btn{padding:12px 18px;font-size:13px;font-weight:500;color:var(--text3);background:none;border:none;border-bottom:3px solid transparent;cursor:pointer;transition:all .15s;white-space:nowrap;margin-bottom:-1px}
-.tab-btn:hover{color:var(--text)}
-.tab-btn.active{color:var(--red);border-bottom-color:var(--red)}
-.tab-panel{display:none;flex:1}
-.tab-panel.active{display:block}
-.vbody-row{display:flex;gap:6px;margin-top:8px}
-.vbody-btn{flex:1;padding:8px 6px;font-size:12px;font-weight:500;background:var(--surf2);color:var(--text2);border:1px solid var(--border-m);border-radius:var(--r-s);cursor:pointer;text-align:center;transition:all .15s;min-height:36px}
-.vbody-btn.active{background:var(--red);color:white;border-color:var(--red)}
-.vbody-btn:hover:not(.active){background:var(--red-l);color:var(--red-t);border-color:var(--red-b)}
-.count-row{display:flex;gap:6px;margin-top:8px}
-.count-btn{flex:1;padding:7px 6px;font-size:12px;font-weight:500;background:var(--surf2);color:var(--text2);border:1px solid var(--border-m);border-radius:20px;cursor:pointer;transition:all .15s;min-height:34px}
-.count-btn.active{background:var(--red);color:white;border-color:var(--red)}
-.count-btn:hover:not(.active){background:var(--red-l);color:var(--red-t);border-color:var(--red-b)}
-.vc{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:10px;box-shadow:var(--sh);transition:box-shadow .15s;display:flex}
-.vc:hover{box-shadow:var(--sh-m)}
-.vc-thumb{width:148px;flex-shrink:0;position:relative;background:#000;overflow:hidden}
-.vc-thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.vc-rank{position:absolute;top:6px;left:6px;background:rgba(0,0,0,.75);color:#fff;font-size:11px;font-weight:700;padding:2px 7px;border-radius:20px}
-.vc-body{flex:1;padding:10px 13px;display:flex;flex-direction:column;gap:5px;min-width:0}
-.vc-title{font-size:13.5px;font-weight:600;line-height:1.4;color:var(--text);word-break:break-word}
-.vc-channel{font-size:12px;color:var(--text3)}
-.vc-stats{display:flex;gap:10px;flex-wrap:wrap}
-.vstat{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2)}
-.vstat svg{width:13px;height:13px;flex-shrink:0;opacity:.7}
-.vc-actions{display:flex;gap:6px;margin-top:4px;flex-wrap:wrap}
-.vc-btn{padding:5px 11px;font-size:12px;border-radius:var(--r-xs);cursor:pointer;border:1px solid var(--border-m);background:var(--surf2);color:var(--text);text-decoration:none;display:inline-flex;align-items:center;gap:4px;transition:all .15s;white-space:nowrap;min-height:30px}
-.vc-btn:hover{background:var(--red-l);color:var(--red-t);border-color:var(--red-b)}
-.vc-btn.prim{background:var(--red);color:#fff;border-color:var(--red)}
-.vc-btn.prim:hover{background:var(--red-h)}
-.sort-note{font-size:11.5px;color:var(--text3);margin-bottom:10px}
-@media(max-width:520px){.vc{flex-direction:column}.vc-thumb{width:100%;height:160px}}
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 </style>
 </head>
-<body>
+<body class="bg-slate-50 text-slate-900 h-screen flex flex-col md:flex-row overflow-hidden antialiased">
 
-<header class="topbar">
-  <div class="topbar-logo" aria-hidden="true">
-    <svg viewBox="0 0 24 24"><path d="M23 7s-.3-2-1.2-2.8C20.7 3 19.4 3 18.8 2.9 16.2 2.8 12 2.8 12 2.8s-4.2 0-6.8.1C4.6 3 3.3 3 2.2 4.2 1.3 5 1 7 1 7S.7 9.3.7 11.5v2.1c0 2.2.3 4.4.3 4.4s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.3 22.2 12 22.2 12 22.2s4.2 0 6.8-.3c.6-.1 1.9-.1 3-1.3.9-.8 1.2-2.8 1.2-2.8s.3-2.2.3-4.4v-2.1C23.3 9.3 23 7 23 7zm-13.8 8.9V8.1l8.1 3.9-8.1 3.9z"/></svg>
+<aside class="w-full md:w-80 bg-white border-r border-slate-200 flex flex-col h-1/2 md:h-full z-20 shadow-sm flex-shrink-0">
+  <div class="h-16 flex items-center px-6 border-b border-slate-200 bg-white">
+    <div class="w-8 h-8 bg-brand-600 rounded-lg flex items-center justify-center mr-3 shadow-sm">
+      <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M23 7s-.3-2-1.2-2.8C20.7 3 19.4 3 18.8 2.9 16.2 2.8 12 2.8 12 2.8s-4.2 0-6.8.1C4.6 3 3.3 3 2.2 4.2 1.3 5 1 7 1 7S.7 9.3.7 11.5v2.1c0 2.2.3 4.4.3 4.4s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.3 22.2 12 22.2 12 22.2s4.2 0 6.8-.3c.6-.1 1.9-.1 3-1.3.9-.8 1.2-2.8 1.2-2.8s.3-2.2.3-4.4v-2.1C23.3 9.3 23 7 23 7zm-13.8 8.9V8.1l8.1 3.9-8.1 3.9z"/></svg>
+    </div>
+    <h1 class="font-semibold text-[15px] tracking-tight">Análise YouTube</h1>
   </div>
-  <h1>Buscador de Comentários</h1>
-  <div class="topbar-right">
-    <span style="font-size:11.5px;padding:3px 10px;border-radius:20px;font-weight:500;background:var(--green);color:var(--green-t);border:1px solid var(--green-b)">API configurada</span>
-  </div>
-</header>
 
-<div class="layout">
-  <aside class="panel-l" aria-label="Configurações">
-    <div class="card" id="cardVideosInput">
-      <div class="card-lbl">Vídeos</div>
-      <label class="flabel" for="videoInput">URLs ou IDs (um por linha)</label>
-      <textarea id="videoInput" placeholder="https://youtube.com/watch?v=...&#10;https://youtu.be/abc12345678&#10;xyz98765432" oninput="onVideoInput()"></textarea>
-      <p class="hint">Cole quantas URLs ou IDs quiser, uma por linha. Aceita URL completa, link curto (youtu.be) ou ID de 11 caracteres.</p>
-      <div id="videoBadge"></div>
+  <div class="flex-1 overflow-y-auto p-5 space-y-6">
+    <div id="cardVideosInput" class="space-y-2">
+      <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Fontes de Dados</label>
+      <textarea id="videoInput" placeholder="https://youtube.com/watch?v=...&#10;Cole links ou IDs (um por linha)" class="w-full h-28 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none resize-none transition-all shadow-sm" oninput="onVideoInput()"></textarea>
+      <div id="videoBadge" class="empty:hidden"></div>
     </div>
 
-    <div class="card" id="cardKeywords">
-      <div class="card-lbl">Palavras-chave para filtrar</div>
-      <div class="kw-row">
-        <input type="text" id="kwInput" placeholder="Digite e pressione Enter..." aria-label="Adicionar palavra-chave" />
-        <button class="btn-add" onclick="addKw()">Adicionar</button>
+    <div id="cardKeywords" class="space-y-2">
+      <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Filtro de Palavras</label>
+      <div class="flex gap-2">
+        <input type="text" id="kwInput" placeholder="Ex: inteligência..." class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none shadow-sm" />
+        <button onclick="addKw()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 rounded-lg text-sm font-medium transition-colors border border-slate-200">Add</button>
       </div>
-      <div class="tag-area" id="tagArea">
-        <span class="tag-empty">Sem filtro — todos os comentários serão exibidos</span>
-      </div>
-      <p class="hint">Vários termos funcionam como OU. Um comentário aparece se contiver ao menos um deles.</p>
-    </div>
-
-    <div class="card" id="cardDisplayCols">
-      <div class="card-lbl">Exibir nos resultados</div>
-      <div class="check-cols">
-        <label class="chk-item disabled" aria-disabled="true"><input type="checkbox" checked disabled> Comentário</label>
-        <label class="chk-item"><input type="checkbox" id="chk_video" checked> Vídeo</label>
-        <label class="chk-item"><input type="checkbox" id="chk_author" checked> Autor</label>
-        <label class="chk-item"><input type="checkbox" id="chk_date" checked> Data</label>
-        <label class="chk-item"><input type="checkbox" id="chk_likes" checked> Curtidas</label>
-        <label class="chk-item"><input type="checkbox" id="chk_link" checked> Link</label>
+      <div id="tagArea" class="flex flex-wrap gap-1.5 mt-2 min-h-[24px]">
+        <span class="text-xs text-slate-400">Sem filtros (exibe todos)</span>
       </div>
     </div>
 
-    <div class="card" id="cardExportOpts">
-      <div class="card-lbl">Exportar como</div>
-      <div class="check-group">
-        <label class="chk-item"><input type="checkbox" id="exp_xlsx" checked> Excel (.xlsx)</label>
-        <label class="chk-item"><input type="checkbox" id="exp_csv"> CSV (.csv)</label>
+    <div id="cardDisplayCols" class="space-y-2">
+      <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Colunas Visíveis</label>
+      <div class="grid grid-cols-2 gap-2 text-sm">
+        <label class="flex items-center gap-2 text-slate-400 cursor-not-allowed"><input type="checkbox" checked disabled class="accent-brand-500 w-4 h-4"> Texto</label>
+        <label class="flex items-center gap-2 cursor-pointer hover:text-brand-600"><input type="checkbox" id="chk_video" checked class="accent-brand-500 w-4 h-4 cursor-pointer"> Vídeo</label>
+        <label class="flex items-center gap-2 cursor-pointer hover:text-brand-600"><input type="checkbox" id="chk_author" checked class="accent-brand-500 w-4 h-4 cursor-pointer"> Autor</label>
+        <label class="flex items-center gap-2 cursor-pointer hover:text-brand-600"><input type="checkbox" id="chk_date" checked class="accent-brand-500 w-4 h-4 cursor-pointer"> Data</label>
+        <label class="flex items-center gap-2 cursor-pointer hover:text-brand-600"><input type="checkbox" id="chk_likes" checked class="accent-brand-500 w-4 h-4 cursor-pointer"> Curtidas</label>
+        <label class="flex items-center gap-2 cursor-pointer hover:text-brand-600"><input type="checkbox" id="chk_link" checked class="accent-brand-500 w-4 h-4 cursor-pointer"> Link</label>
       </div>
     </div>
 
-    <div class="card" id="cardVideoSearch" style="display:none">
-      <div class="card-lbl">Busca de vídeos virais</div>
-      <label class="flabel" for="videoQuery">Palavra-chave</label>
-      <input type="text" id="videoQuery" placeholder="Ex: inteligência artificial..." />
-      <p class="hint" style="margin-top:6px">Busca os vídeos mais relevantes e ordena por visualizações.</p>
-      <div class="flabel" style="margin-top:11px;margin-bottom:3px">Ordenar por</div>
-      <div class="vbody-row">
-        <button class="vbody-btn active" id="orderRel">Relevância</button>
-        <button class="vbody-btn" id="orderDate">Mais recentes</button>
+    <div id="cardVideoSearch" class="space-y-4 hidden">
+      <div>
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Termo de Busca</label>
+        <input type="text" id="videoQuery" placeholder="Ex: geopolítica..." class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none shadow-sm" />
       </div>
-      <div class="flabel" style="margin-top:11px;margin-bottom:3px">Quantidade</div>
-      <div class="count-row">
-        <button class="count-btn" id="cnt10">10</button>
-        <button class="count-btn active" id="cnt20">20</button>
-        <button class="count-btn" id="cnt50">50</button>
-      </div>
-    </div>
-
-    <div class="card" id="cardVideoFilters" style="display:none">
-      <div class="card-lbl">Filtros de Busca</div>
-      <label class="flabel" for="regionSelect">Região (País)</label>
-      <select id="regionSelect">
-        <option value="BR" selected>Brasil (BR)</option>
-        <option value="US">Estados Unidos (US)</option>
-        <option value="PT">Portugal (PT)</option>
-        <option value="ALL">Global / Todas</option>
-      </select>
-      <label class="flabel" for="dateSelect" style="margin-top:11px">Ano de Publicação (Últimos 10 Anos)</label>
-      <select id="dateSelect">
-        <option value="ALL" selected>Qualquer ano (Geral)</option>
-        <option value="2026">2026</option>
-        <option value="2025">2025</option>
-        <option value="2024">2024</option>
-        <option value="2023">2023</option>
-        <option value="2022">2022</option>
-        <option value="2021">2021</option>
-        <option value="2020">2020</option>
-        <option value="2019">2019</option>
-        <option value="2018">2018</option>
-        <option value="2017">2017</option>
-        <option value="2016">2016</option>
-      </select>
-      <p class="hint">Filtra vídeos lançados especificamente no ano selecionado.</p>
-    </div>
-
-    <div class="action-col">
-      <button class="btn-primary" id="btnSearch" onclick="doSearch()">
-        <svg viewBox="0 0 24 24"><path d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" stroke="white" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>
-        Buscar comentários
-      </button>
-      <button class="btn-sec hidden" id="btnExport" onclick="doExport()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="15" height="15"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        Exportar resultados
-      </button>
-      <button class="btn-ghost hidden" id="btnClear" onclick="clearAll()">
-        Limpar resultados
-      </button>
-      <button class="btn-primary" id="btnVideoSearch" style="display:none">
-        <svg viewBox="0 0 24 24"><path d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" stroke="white" stroke-width="2.2" fill="none" stroke-linecap="round"/></svg>
-        Buscar vídeos
-      </button>
-    </div>
-
-    <div class="callout red" id="errorBox" role="alert">
-      <span>⚠</span><span id="errorMsg"></span>
-    </div>
-
-    <div class="callout amber">
-      <span>💡</span>
-      <span>A cota gratuita da API é de 10.000 unidades por dia. Cada 100 comentários consome cerca de 1 unidade.</span>
-    </div>
-  </aside>
-
-  <div style="display:flex;flex-direction:column;min-height:calc(100vh - 54px)">
-    <div class="tabs">
-      <button class="tab-btn active" id="tabComments">Comentários</button>
-      <button class="tab-btn" id="tabVideos">Buscar vídeos virais</button>
-    </div>
-
-    <main class="tab-panel active panel-r" id="panelComments" aria-label="Comentários">
-      <div class="card prog-card" id="progCard" style="margin-bottom:.9rem">
-        <div class="card-lbl">Progresso da busca</div>
-        <div class="prog-list" id="progList"></div>
-      </div>
-      <div id="resHeader" style="display:none">
-        <div class="res-top">
-          <h2>Resultados</h2>
-          <span class="badge" id="badgeCount"></span>
-          <input type="text" class="inline-search" id="searchInline" placeholder="Filtrar resultados..." oninput="applyInline()" aria-label="Filtrar resultados exibidos" />
+      <div>
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Ordenar por</label>
+        <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+          <button id="orderRel" class="flex-1 py-1.5 text-xs font-medium rounded-md bg-white shadow-sm text-brand-600 border border-slate-200" onclick="setOrder('relevance')">Métricas</button>
+          <button id="orderDate" class="flex-1 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-700" onclick="setOrder('date')">Recentes</button>
         </div>
       </div>
-      <div id="resArea">
-        <div class="state-box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          Configure os campos ao lado e clique em <strong>Buscar comentários</strong>
+      <div>
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Resultados</label>
+        <div class="flex gap-2">
+          <button id="cnt10" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100" onclick="setCount(10)">10</button>
+          <button id="cnt20" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-brand-500 bg-brand-50 text-brand-700" onclick="setCount(20)">20</button>
+          <button id="cnt50" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100" onclick="setCount(50)">50</button>
         </div>
       </div>
-      <div class="pag" id="pagArea"></div>
-    </main>
+    </div>
 
-    <main class="tab-panel panel-r" id="panelVideos" aria-label="Vídeos virais">
-      <div id="videoResArea">
-        <div class="state-box">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          Use os campos ao lado para buscar vídeos virais
-        </div>
+    <div id="cardVideoFilters" class="space-y-4 hidden">
+      <div>
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">País</label>
+        <select id="regionSelect" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none shadow-sm bg-white">
+          <option value="BR" selected>Brasil (BR)</option>
+          <option value="US">Estados Unidos (US)</option>
+          <option value="PT">Portugal (PT)</option>
+          <option value="ALL">Global / Todas</option>
+        </select>
       </div>
-    </main>
+      <div>
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Ano Específico</label>
+        <select id="dateSelect" class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none shadow-sm bg-white">
+          <option value="ALL" selected>Qualquer ano</option>
+          <option value="2026">2026</option>
+          <option value="2025">2025</option>
+          <option value="2024">2024</option>
+          <option value="2023">2023</option>
+          <option value="2022">2022</option>
+          <option value="2021">2021</option>
+          <option value="2020">2020</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="pt-4 border-t border-slate-200 space-y-2 mt-auto">
+      <div id="errorBox" class="hidden items-start gap-2 bg-red-50 text-red-700 text-xs p-3 rounded-lg border border-red-200 mb-4">
+        <span class="font-bold">⚠</span><span id="errorMsg"></span>
+      </div>
+
+      <button id="btnSearch" onclick="doSearch()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        Extrair Comentários
+      </button>
+
+      <button id="btnVideoSearch" onclick="doVideoSearch()" class="hidden w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 px-4 rounded-xl items-center justify-center gap-2 transition-all shadow-sm">
+        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        Buscar Vídeos
+      </button>
+      
+      <div id="cardExportOpts" class="pt-2">
+        <div class="flex gap-2 mb-2 justify-center text-sm">
+          <label class="flex items-center gap-1.5"><input type="checkbox" id="exp_xlsx" checked class="accent-brand-500 w-4 h-4"> Excel</label>
+          <label class="flex items-center gap-1.5"><input type="checkbox" id="exp_csv" class="accent-brand-500 w-4 h-4"> CSV</label>
+        </div>
+        <button id="btnExport" onclick="doExport()" class="hidden w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all shadow-sm text-sm">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Exportar Dados
+        </button>
+      </div>
+
+      <button id="btnClear" onclick="clearAll()" class="hidden w-full text-slate-400 hover:text-red-500 font-medium py-2 text-sm transition-colors">Limpar Sessão</button>
+    </div>
   </div>
-</div>
+</aside>
 
-<div class="toast" id="toast"></div>
+<main class="flex-1 flex flex-col h-1/2 md:h-full relative overflow-hidden bg-slate-50">
+  
+  <header class="bg-white border-b border-slate-200 px-6 pt-4 flex gap-6">
+    <button id="tabComments" onclick="switchTab('comments')" class="pb-3 text-sm font-medium border-b-2 border-brand-500 text-brand-600 transition-colors">Comentários (Alvos)</button>
+    <button id="tabVideos" onclick="switchTab('videos')" class="pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">Pesquisa de Vídeos</button>
+  </header>
+
+  <div id="panelComments" class="flex-1 overflow-y-auto p-6 md:p-8">
+    <div id="progCard" class="hidden bg-white p-4 rounded-xl border border-slate-200 shadow-sm mb-6">
+      <h3 class="text-xs font-bold text-slate-500 uppercase mb-3">Progresso da Extração</h3>
+      <div id="progList" class="space-y-2"></div>
+    </div>
+
+    <div id="resHeader" class="hidden flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+      <div>
+        <h2 class="text-lg font-bold text-slate-800">Resultados Encontrados</h2>
+        <span id="badgeCount" class="inline-block mt-1 bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full text-xs font-semibold"></span>
+      </div>
+      <input type="text" id="searchInline" placeholder="Buscar no texto do comentário..." class="w-full md:w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none shadow-sm bg-white" oninput="applyInline()" />
+    </div>
+
+    <div id="resArea" class="space-y-3">
+      <div class="h-64 flex flex-col items-center justify-center text-slate-400 text-center">
+        <svg class="w-12 h-12 mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+        <p class="text-sm">Preencha as URLs na barra lateral e clique em <strong class="text-slate-600">Extrair</strong></p>
+      </div>
+    </div>
+    
+    <div id="pagArea" class="flex justify-center items-center gap-1 mt-8 pb-8 flex-wrap"></div>
+  </div>
+
+  <div id="panelVideos" class="hidden flex-1 overflow-y-auto p-6 md:p-8">
+    <div id="videoResArea">
+      <div class="h-64 flex flex-col items-center justify-center text-slate-400 text-center">
+        <svg class="w-12 h-12 mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+        <p class="text-sm">Utilize os filtros laterais para mapear novos vídeos sobre um assunto.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="fixed bottom-6 left-1/2 -translate-x-1/2 translate-y-24 bg-slate-900 text-white px-5 py-3 rounded-full text-sm font-medium shadow-xl opacity-0 transition-all duration-300 pointer-events-none z-50 flex items-center gap-2"></div>
+
+</main>
 
 <script>
 let videoOrder = 'relevance';
 let videoCount = 20;
 
 function switchTab(tab) {
-  const isComments = (tab === 'comments');
-  document.getElementById('tabComments').classList.toggle('active', isComments);
-  document.getElementById('tabVideos').classList.toggle('active', !isComments);
-  document.getElementById('panelComments').classList.toggle('active', isComments);
-  document.getElementById('panelVideos').classList.toggle('active', !isComments);
+  const isC = (tab === 'comments');
   
-  document.getElementById('cardVideosInput').style.display = isComments ? 'block' : 'none';
-  document.getElementById('cardKeywords').style.display = isComments ? 'block' : 'none';
-  document.getElementById('cardDisplayCols').style.display = isComments ? 'block' : 'none';
-  document.getElementById('cardExportOpts').style.display = isComments ? 'block' : 'none';
-
-  document.getElementById('cardVideoSearch').style.display = isComments ? 'none' : 'block';
-  document.getElementById('cardVideoFilters').style.display = isComments ? 'none' : 'block';
-
-  document.getElementById('btnSearch').style.display = isComments ? 'flex' : 'none';
-  document.getElementById('btnVideoSearch').style.display = isComments ? 'none' : 'flex';
+  document.getElementById('tabComments').className = `pb-3 text-sm font-medium border-b-2 transition-colors ${isC ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`;
+  document.getElementById('tabVideos').className = `pb-3 text-sm font-medium border-b-2 transition-colors ${!isC ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`;
   
-  if (!isComments) {
+  document.getElementById('panelComments').style.display = isC ? 'block' : 'none';
+  document.getElementById('panelVideos').style.display = !isC ? 'block' : 'none';
+  
+  document.getElementById('cardVideosInput').style.display = isC ? 'block' : 'none';
+  document.getElementById('cardKeywords').style.display = isC ? 'block' : 'none';
+  document.getElementById('cardDisplayCols').style.display = isC ? 'block' : 'none';
+  document.getElementById('cardExportOpts').style.display = isC ? 'block' : 'none';
+  
+  document.getElementById('cardVideoSearch').style.display = isC ? 'none' : 'block';
+  document.getElementById('cardVideoFilters').style.display = isC ? 'none' : 'block';
+  
+  document.getElementById('btnSearch').style.display = isC ? 'flex' : 'none';
+  document.getElementById('btnVideoSearch').style.display = isC ? 'none' : 'flex';
+  
+  if (!isC) {
     document.getElementById('btnExport').classList.add('hidden');
     document.getElementById('btnClear').classList.add('hidden');
+  } else if (allResults && allResults.length > 0) {
+    document.getElementById('btnExport').classList.remove('hidden');
+    document.getElementById('btnClear').classList.remove('hidden');
   }
 }
 
 function setOrder(order) {
   videoOrder = order;
-  document.getElementById('orderRel').classList.toggle('active', order === 'relevance');
-  document.getElementById('orderDate').classList.toggle('active', order === 'date');
+  const rel = document.getElementById('orderRel');
+  const dat = document.getElementById('orderDate');
+  
+  rel.className = order === 'relevance' 
+    ? 'flex-1 py-1.5 text-xs font-medium rounded-md bg-white shadow-sm text-brand-600 border border-slate-200' 
+    : 'flex-1 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-700';
+    
+  dat.className = order === 'date' 
+    ? 'flex-1 py-1.5 text-xs font-medium rounded-md bg-white shadow-sm text-brand-600 border border-slate-200' 
+    : 'flex-1 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-700';
 }
 
 function setCount(n) {
   videoCount = n;
   ['cnt10','cnt20','cnt50'].forEach(id => {
     const el = document.getElementById(id);
-    el.classList.toggle('active', parseInt(el.textContent) === n);
+    const num = parseInt(el.textContent);
+    el.className = (num === n) 
+      ? 'flex-1 py-1.5 text-xs font-medium rounded-lg border border-brand-500 bg-brand-50 text-brand-700 transition-colors' 
+      : 'flex-1 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors';
   });
 }
 
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 function fmtNum(n) {
-  if (n >= 1e9) return (n/1e9).toFixed(1).replace('.0','') + ' bi';
-  if (n >= 1e6) return (n/1e6).toFixed(1).replace('.0','') + ' mi';
-  if (n >= 1e3) return (n/1e3).toFixed(1).replace('.0','') + ' mil';
+  if (n >= 1e9) return (n/1e9).toFixed(1).replace('.0','') + 'bi';
+  if (n >= 1e6) return (n/1e6).toFixed(1).replace('.0','') + 'M';
+  if (n >= 1e3) return (n/1e3).toFixed(1).replace('.0','') + 'K';
   return String(n);
 }
+function initials(n) { return (n||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?'; }
+function fmtDate(iso) { try { return new Date(iso).toLocaleDateString('pt-BR'); } catch { return iso; } }
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.innerHTML = `<svg class="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> ${msg}`;
+  t.classList.remove('translate-y-24', 'opacity-0');
+  clearTimeout(t._t); 
+  t._t = setTimeout(() => t.classList.add('translate-y-24', 'opacity-0'), 3000);
+}
+function showErr(msg) { document.getElementById('errorMsg').textContent=msg; document.getElementById('errorBox').classList.remove('hidden'); document.getElementById('errorBox').classList.add('flex'); }
+function hideErr() { document.getElementById('errorBox').classList.add('hidden'); document.getElementById('errorBox').classList.remove('flex'); }
 
 function sendToComments(url) {
   const ta = document.getElementById('videoInput');
   ta.value = ta.value.trim() ? ta.value.trim() + '\n' + url : url;
   onVideoInput();
   switchTab('comments');
-  showToast('Vídeo adicionado. Clique em Buscar comentários.');
+  toast('Adicionado à fila de extração!');
 }
 
 async function doVideoSearch() {
   const q = (document.getElementById('videoQuery').value || '').trim();
-  if (!q) { showErr('Informe uma palavra-chave para buscar vídeos.'); return; }
+  if (!q) { showErr('Informe um termo para buscar vídeos.'); return; }
   hideErr();
 
   const region = document.getElementById('regionSelect').value;
-  const selectedYear = document.getElementById('dateSelect').value;
-
+  const year = document.getElementById('dateSelect').value;
   const area = document.getElementById('videoResArea');
   const btn = document.getElementById('btnVideoSearch');
+  
   btn.disabled = true;
-  area.innerHTML = '<div class="state-box"><div class="spin" style="margin:0 auto 14px;width:26px;height:26px;border-width:3px"></div>Buscando vídeos...</div>';
+  area.innerHTML = '<div class="h-64 flex flex-col items-center justify-center text-slate-500"><svg class="w-8 h-8 animate-spin text-brand-500 mb-3" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Buscando na API...</div>';
 
   try {
     let fetchLimit = videoCount * 3;
-    let url = '/api/search?q=' + encodeURIComponent(q) + '&order=' + videoOrder + '&maxResults=' + fetchLimit;
+    let url = `/api/search?q=${encodeURIComponent(q)}&order=${videoOrder}&maxResults=${fetchLimit}`;
     if (region && region !== 'ALL') url += '&regionCode=' + encodeURIComponent(region);
-    
-    // Tratamento de ano específico (Ex: 2022) enviando o range exato para a API do YouTube
-    if (selectedYear && selectedYear !== 'ALL') {
-      const publishedAfter = `${selectedYear}-01-01T00:00:00Z`;
-      const publishedBefore = `${parseInt(selectedYear) + 1}-01-01T00:00:00Z`;
+    if (year && year !== 'ALL') {
+      const publishedAfter = `${year}-01-01T00:00:00Z`;
+      const publishedBefore = `${parseInt(year) + 1}-01-01T00:00:00Z`;
       url += `&publishedAfter=${encodeURIComponent(publishedAfter)}&publishedBefore=${encodeURIComponent(publishedBefore)}`;
     }
 
@@ -415,10 +298,8 @@ async function doVideoSearch() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
-    let rawVideos = data.videos || [];
-
-    // Filtro rigoroso anti-shorts
-    let filteredVideos = rawVideos.filter(v => {
+    let raw = data.videos || [];
+    let filtered = raw.filter(v => {
       const urlLower = (v.url || '').toLowerCase();
       const titleLower = (v.title || '').toLowerCase();
       if (urlLower.includes('/shorts/')) return false;
@@ -427,11 +308,11 @@ async function doVideoSearch() {
       return true;
     }).slice(0, videoCount);
 
-    renderVideos(filteredVideos, q, selectedYear);
-    showToast(filteredVideos.length + ' vídeo' + (filteredVideos.length !== 1 ? 's' : '') + ' encontrado' + (filteredVideos.length !== 1 ? 's' : ''));
+    renderVideos(filtered, q, year);
+    toast(`${filtered.length} resultados mapeados.`);
   } catch(e) {
-    showErr('Erro ao buscar vídeos: ' + e.message);
-    area.innerHTML = '<div class="state-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/></svg>Não foi possível completar a busca.</div>';
+    showErr(e.message);
+    area.innerHTML = '<div class="h-64 flex items-center justify-center text-red-500 font-medium">Erro na busca. Verifique a API.</div>';
   } finally {
     btn.disabled = false;
   }
@@ -440,40 +321,44 @@ async function doVideoSearch() {
 function renderVideos(videos, query, year) {
   const area = document.getElementById('videoResArea');
   if (!videos.length) {
-    const yearMsg = year !== 'ALL' ? ` do ano ${year}` : '';
-    area.innerHTML = '<div class="state-box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>Nenhum vídeo encontrado para "' + esc(query) + '"' + yearMsg + ' (shorts foram ignorados)</div>';
+    area.innerHTML = `<div class="h-64 flex items-center justify-center text-slate-500">Nenhum vídeo longo encontrado para "${esc(query)}".</div>`;
     return;
   }
-  const label = videoOrder === 'date' ? 'mais recentes' : 'mais relevantes';
-  const yearDesc = year !== 'ALL' ? ` do ano <strong>${year}</strong>` : '';
-  let html = '<p class="sort-note">' + videos.length + ' vídeo' + (videos.length!==1?'s':'') + ' ' + label + ' para "<strong>' + esc(query) + '</strong>"' + yearDesc + ', ordenados por visualizações</p>';
+  
+  const lbl = videoOrder === 'date' ? 'Mais Recentes' : 'Mais Acessados';
+  let html = `<div class="mb-4 flex items-center justify-between"><h2 class="font-bold text-slate-800 text-lg">Resultados: ${lbl}</h2><span class="text-sm text-slate-500">${videos.length} mapeados</span></div>`;
+  
+  html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">';
   html += videos.map(function(v, i) {
-    return '<div class="vc">' +
-      '<div class="vc-thumb">' +
-        '<img src="' + esc(v.thumbnail) + '" alt="" loading="lazy" />' +
-        '<span class="vc-rank">#' + (i+1) + '</span>' +
-      '</div>' +
-      '<div class="vc-body">' +
-        '<div class="vc-title">' + esc(v.title) + '</div>' +
-        '<div class="vc-channel">' + esc(v.channel) + '</div>' +
-        '<div class="vc-stats">' +
-          '<span class="vstat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>' + fmtNum(v.views) + '</span>' +
-          '<span class="vstat"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg>' + fmtNum(v.likes) + '</span>' +
-          '<span class="vstat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' + fmtNum(v.comments) + '</span>' +
-        '</div>' +
-        '<div class="vc-actions">' +
-          '<button class="vc-btn prim" onclick="sendToComments(\x27' + esc(v.url) + '\x27)">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="12" height="12"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
-            'Buscar comentários' +
-          '</button>' +
-          '<a class="vc-btn" href="' + esc(v.url) + '" target="_blank" rel="noopener">' +
-            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" width="12" height="12"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>' +
-            'Abrir no YouTube' +
-          '</a>' +
-        '</div>' +
-      '</div>' +
-    '</div>';
+    const views = v.views || 0;
+    const interactions = (v.likes || 0) + (v.comments || 0);
+    const eng = views > 0 ? ((interactions / views) * 100).toFixed(2) : 0;
+    const badgeColor = eng >= 2.5 ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : (eng >= 1 ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200');
+
+    return `
+      <div class="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col group">
+        <div class="relative aspect-video bg-slate-900 overflow-hidden">
+          <img src="${esc(v.thumbnail)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
+          <span class="absolute top-2 left-2 bg-black/70 text-white text-xs font-bold px-2.5 py-1 rounded-md backdrop-blur-sm">#${i+1}</span>
+          <span class="absolute top-2 right-2 ${badgeColor} border text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md shadow-sm">Eng: ${eng}%</span>
+        </div>
+        <div class="p-4 flex flex-col flex-1 gap-2">
+          <div class="font-semibold text-sm text-slate-900 leading-tight line-clamp-2" title="${esc(v.title)}">${esc(v.title)}</div>
+          <div class="text-xs text-slate-500 font-medium">${esc(v.channel)}</div>
+          <div class="flex items-center gap-4 text-xs text-slate-600 mt-auto pt-3 border-t border-slate-100">
+            <span class="flex items-center gap-1 font-medium" title="Visualizações"><svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg> ${fmtNum(v.views)}</span>
+            <span class="flex items-center gap-1 font-medium" title="Curtidas"><svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="currentColor"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg> ${fmtNum(v.likes)}</span>
+            <span class="flex items-center gap-1 font-medium" title="Comentários"><svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg> ${fmtNum(v.comments)}</span>
+          </div>
+          <div class="flex gap-2 mt-3">
+            <button class="flex-1 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 text-xs font-semibold py-2 rounded-lg transition-colors flex justify-center items-center gap-1.5" onclick="sendToComments('${esc(v.url)}')">Extrair Alvo</button>
+            <a href="${esc(v.url)}" target="_blank" class="w-10 flex items-center justify-center bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 rounded-lg transition-colors" title="Assistir"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></a>
+          </div>
+        </div>
+      </div>
+    `;
   }).join('');
+  html += '</div>';
   area.innerHTML = html;
 }
 
@@ -485,25 +370,9 @@ let videoTitles = {};
 let currentPage = 1;
 
 window.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('kwInput').addEventListener('keydown', e => {
-    if (e.key==='Enter') { e.preventDefault(); addKw(); }
-  });
-
-  document.getElementById('tabComments').addEventListener('click', () => switchTab('comments'));
-  document.getElementById('tabVideos').addEventListener('click', () => switchTab('videos'));
-
-  document.getElementById('orderRel').addEventListener('click', () => setOrder('relevance'));
-  document.getElementById('orderDate').addEventListener('click', () => setOrder('date'));
-  document.getElementById('cnt10').addEventListener('click', () => setCount(10));
-  document.getElementById('cnt20').addEventListener('click', () => setCount(20));
-  document.getElementById('cnt50').addEventListener('click', () => setCount(50));
-  document.getElementById('btnVideoSearch').addEventListener('click', () => doVideoSearch());
-  document.getElementById('videoQuery').addEventListener('keydown', e => {
-    if (e.key === 'Enter') doVideoSearch();
-  });
+  document.getElementById('kwInput').addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); addKw(); }});
+  document.getElementById('videoQuery').addEventListener('keydown', e => { if(e.key==='Enter') doVideoSearch(); });
 });
-
-const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
 function extractId(raw) {
   raw = (raw||'').trim();
@@ -511,7 +380,6 @@ function extractId(raw) {
   for (const p of ps) { const m = raw.match(p); if (m) return m[1]; }
   return null;
 }
-
 function parseVideos(txt) {
   const seen = new Set(); const out = [];
   for (const line of txt.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean)) {
@@ -521,76 +389,48 @@ function parseVideos(txt) {
   }
   return out;
 }
-
-function highlight(text, kws) {
-  if (!kws.length) return esc(text);
-  const safe = esc(text);
-  const re = new RegExp(`(${kws.map(k=>k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|')})`, 'gi');
-  return safe.replace(re,'<mark>$1</mark>');
-}
-
-function initials(n) { return (n||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?'; }
-function fmtDate(iso) { try { return new Date(iso).toLocaleDateString('pt-BR'); } catch { return iso; } }
-
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.textContent = msg; t.classList.add('on');
-  clearTimeout(t._t); t._t = setTimeout(()=>t.classList.remove('on'),2800);
-}
-function showToast(m) { toast(m); }
-
-function showErr(msg) { document.getElementById('errorMsg').textContent=msg; document.getElementById('errorBox').classList.add('on'); }
-function hideErr() { document.getElementById('errorBox').classList.remove('on'); }
-
 function onVideoInput() {
   const v = document.getElementById('videoInput').value;
   const bd = document.getElementById('videoBadge');
   if (!v.trim()) { bd.innerHTML=''; return; }
   const p = parseVideos(v);
   const ok = p.filter(x=>x.id).length;
-  const bad= p.length - ok;
-  let h = `<div class="vcb">${ok} vídeo${ok!==1?'s':''} reconhecido${ok!==1?'s':''}`;
-  if (bad>0) h += ` &middot; ${bad} linha${bad!==1?'s':''} ignorada${bad!==1?'s':''}`;
-  bd.innerHTML = h+'</div>';
+  bd.innerHTML = `<span class="inline-block mt-1 bg-brand-50 text-brand-700 border border-brand-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">${ok} válidos detectados</span>`;
 }
 
 function addKw() {
   const inp = document.getElementById('kwInput');
   const val = inp.value.trim().toLowerCase();
   if (!val || keywords.includes(val)) { inp.value=''; return; }
-  keywords.push(val); inp.value=''; renderTags();
+  keywords.push(val); inp.value=''; renderTags(); applyInline();
 }
-
-function removeKw(i) { keywords.splice(i,1); renderTags(); }
-
+function removeKw(i) { keywords.splice(i,1); renderTags(); applyInline(); }
 function renderTags() {
   const area = document.getElementById('tagArea');
-  if (!keywords.length) { area.innerHTML='<span class="tag-empty">Sem filtro — todos os comentários serão exibidos</span>'; return; }
-  area.innerHTML = keywords.map((k,i)=>`<div class="tag">${esc(k)}<button class="tag-x" onclick="removeKw(${i})" aria-label="Remover ${esc(k)}">×</button></div>`).join('');
+  if (!keywords.length) { area.innerHTML='<span class="text-xs text-slate-400">Sem filtros (exibe todos)</span>'; return; }
+  area.innerHTML = keywords.map((k,i)=>`<div class="inline-flex items-center gap-1.5 bg-brand-50 text-brand-700 border border-brand-200 rounded-md px-2 py-1 text-xs font-semibold">${esc(k)}<button onclick="removeKw(${i})" class="text-brand-400 hover:text-brand-700 leading-none">×</button></div>`).join('');
+}
+
+function highlight(text, kws) {
+  if (!kws.length) return esc(text);
+  const safe = esc(text);
+  const re = new RegExp(`(${kws.map(k=>k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|')})`, 'gi');
+  return safe.replace(re,'<mark class="bg-yellow-200 text-yellow-900 px-1 rounded-sm">$1</mark>');
 }
 
 async function fetchTitle(id) {
-  try {
-    const res = await fetch(`/api/title?videoId=${encodeURIComponent(id)}`);
-    const d = await res.json();
-    if (d.error) return id;
-    return d.title || id;
-  } catch { return id; }
+  try { const res = await fetch(`/api/title?videoId=${encodeURIComponent(id)}`); const d = await res.json(); return d.error ? id : d.title || id; } 
+  catch { return id; }
 }
-
 async function fetchComments(videoId, onProg) {
-  const list = [];
-  let token = '';
-  let page = 0;
+  const list = []; let token = ''; let page = 0;
   do {
     let url = `/api/comments?videoId=${encodeURIComponent(videoId)}`;
     if (token) url += `&pageToken=${encodeURIComponent(token)}`;
-    const res = await fetch(url);
-    const data = await res.json();
+    const res = await fetch(url); const data = await res.json();
     if (data.error) throw new Error(data.error);
     if (data.comments) list.push(...data.comments);
-    token = data.nextPageToken || '';
-    page++;
+    token = data.nextPageToken || ''; page++;
     if (onProg) onProg(page, list.length);
     if (page >= 10) break;
   } while (token);
@@ -600,212 +440,145 @@ async function fetchComments(videoId, onProg) {
 async function doSearch() {
   const txt = document.getElementById('videoInput').value;
   const parsed = parseVideos(txt).filter(x => x.id);
-  if (!parsed.length) {
-    showErr('Insira ao menos uma URL ou ID de vídeo válido do YouTube.');
-    return;
-  }
+  if (!parsed.length) { showErr('Insira ao menos um link válido.'); return; }
   hideErr();
 
-  const btn = document.getElementById('btnSearch');
-  btn.disabled = true;
-  const progCard = document.getElementById('progCard');
-  const progList = document.getElementById('progList');
-  progCard.classList.add('on');
-  progList.innerHTML = '';
-
-  allResults = [];
-  videoTitles = {};
+  document.getElementById('btnSearch').disabled = true;
+  const pCard = document.getElementById('progCard');
+  const pList = document.getElementById('progList');
+  pCard.classList.remove('hidden'); pList.innerHTML = '';
+  allResults = []; videoTitles = {};
 
   for (let i = 0; i < parsed.length; i++) {
-    const item = parsed[i];
-    const divId = 'prog_' + i;
-    progList.insertAdjacentHTML('beforeend', `
-      <div class="pi" id="${divId}">
-        <div class="pi-icon"><span class="spin"></span></div>
-        <div class="pi-lbl">Carregando vídeo ${i + 1} de ${parsed.length} (${item.id})...</div>
-      </div>
-    `);
-
+    const item = parsed[i]; const divId = 'prog_' + i;
+    pList.insertAdjacentHTML('beforeend', `<div id="${divId}" class="flex items-center gap-3 text-sm p-2 rounded-lg bg-slate-50 border border-slate-100"><svg class="w-4 h-4 animate-spin text-brand-500 flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-slate-600 truncate">Processando alvo: ${item.id}</span></div>`);
+    
     try {
-      const title = await fetchTitle(item.id);
-      videoTitles[item.id] = title;
-
+      const title = await fetchTitle(item.id); videoTitles[item.id] = title;
       const comments = await fetchComments(item.id, (pg, count) => {
-        const el = document.getElementById(divId);
-        if (el) {
-          el.querySelector('.pi-lbl').textContent = `Vídeo: "${title}" — ${count} comentários obtidos...`;
-        }
+        const el = document.getElementById(divId); if(el) el.querySelector('span').textContent = `[${count} extraídos] ${title}`;
       });
-
-      comments.forEach(c => {
-        c.videoId = item.id;
-        c.videoTitle = title;
-      });
-
+      comments.forEach(c => { c.videoId = item.id; c.videoTitle = title; });
       allResults.push(...comments);
-      document.getElementById(divId).className = 'pi ok';
-      document.getElementById(divId).querySelector('.pi-icon').innerHTML = '✓';
-      document.getElementById(divId).querySelector('.pi-lbl').textContent = `Concluído: "${title}" (${comments.length} comentários)`;
+      
+      const el = document.getElementById(divId);
+      el.className = 'flex items-center gap-3 text-sm p-2 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-800 font-medium';
+      el.innerHTML = `<svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg><span class="truncate">${comments.length} encontrados em: ${title}</span>`;
     } catch (e) {
-      document.getElementById(divId).className = 'pi err';
-      document.getElementById(divId).querySelector('.pi-icon').innerHTML = '✕';
-      document.getElementById(divId).querySelector('.pi-lbl').textContent = `Erro no vídeo ${item.id}: ${e.message}`;
+      const el = document.getElementById(divId);
+      el.className = 'flex items-center gap-3 text-sm p-2 rounded-lg bg-red-50 border border-red-100 text-red-800 font-medium';
+      el.innerHTML = `<svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg><span class="truncate">Erro: ${e.message}</span>`;
     }
   }
 
-  btn.disabled = false;
+  document.getElementById('btnSearch').disabled = false;
   applyInline();
   if (allResults.length > 0) {
     document.getElementById('btnExport').classList.remove('hidden');
     document.getElementById('btnClear').classList.remove('hidden');
-    showToast(`Busca finalizada! ${allResults.length} comentários encontrados.`);
-  } else {
-    showToast('Nenhum comentário encontrado para os vídeos informados.');
+    toast(`Extração concluída: ${allResults.length} comentários na base.`);
   }
 }
 
 function applyInline() {
   const query = (document.getElementById('searchInline').value || '').toLowerCase().trim();
-  
   displayed = allResults.filter(c => {
     if (keywords.length > 0) {
-      const matchKw = keywords.some(k => c.text.toLowerCase().includes(k));
-      if (!matchKw) return false;
+      if (!keywords.some(k => c.text.toLowerCase().includes(k))) return false;
     }
     if (query) {
-      const matchInline = c.text.toLowerCase().includes(query) || 
-                          c.author.toLowerCase().includes(query) || 
-                          c.videoTitle.toLowerCase().includes(query);
-      if (!matchInline) return false;
+      if (!(c.text.toLowerCase().includes(query) || c.author.toLowerCase().includes(query) || c.videoTitle.toLowerCase().includes(query))) return false;
     }
     return true;
   });
-
-  currentPage = 1;
-  renderResults();
+  currentPage = 1; renderResults();
 }
 
 function renderResults() {
-  const resArea = document.getElementById('resArea');
-  const resHeader = document.getElementById('resHeader');
-  const badgeCount = document.getElementById('badgeCount');
-  const pagArea = document.getElementById('pagArea');
-
+  const area = document.getElementById('resArea');
+  const pag = document.getElementById('pagArea');
+  
   if (allResults.length === 0) {
-    resHeader.style.display = 'none';
-    resArea.innerHTML = `
-      <div class="state-box">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-        Configure os campos ao lado e clique em <strong>Buscar comentários</strong>
-      </div>
-    `;
-    pagArea.innerHTML = '';
-    return;
+    document.getElementById('resHeader').classList.add('hidden');
+    area.innerHTML = '<div class="h-64 flex flex-col items-center justify-center text-slate-400 text-center"><svg class="w-12 h-12 mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg><p class="text-sm">Preencha as URLs na barra lateral e clique em <strong class="text-slate-600">Extrair</strong></p></div>';
+    pag.innerHTML = ''; return;
   }
-
-  resHeader.style.display = 'block';
-  badgeCount.textContent = `${displayed.length} resultado${displayed.length !== 1 ? 's' : ''}`;
+  
+  document.getElementById('resHeader').classList.remove('hidden');
+  document.getElementById('resHeader').classList.add('flex');
+  document.getElementById('badgeCount').textContent = `${displayed.length} validados no filtro`;
 
   if (displayed.length === 0) {
-    resArea.innerHTML = '<div class="state-box">Nenhum comentário corresponde aos filtros aplicados.</div>';
-    pagArea.innerHTML = '';
-    return;
+    area.innerHTML = '<div class="bg-white p-6 rounded-xl border border-slate-200 text-center text-slate-500">Nenhum comentário bate com as palavras-chave informadas.</div>';
+    pag.innerHTML = ''; return;
   }
 
   const totalPages = Math.ceil(displayed.length / PAGE_SIZE);
   if (currentPage > totalPages) currentPage = totalPages;
+  const slice = displayed.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const start = (currentPage - 1) * PAGE_SIZE;
-  const slice = displayed.slice(start, start + PAGE_SIZE);
+  const shVid = document.getElementById('chk_video').checked;
+  const shAut = document.getElementById('chk_author').checked;
+  const shDat = document.getElementById('chk_date').checked;
+  const shLik = document.getElementById('chk_likes').checked;
+  const shLnk = document.getElementById('chk_link').checked;
 
-  const showVideo = document.getElementById('chk_video').checked;
-  const showAuthor = document.getElementById('chk_author').checked;
-  const showDate = document.getElementById('chk_date').checked;
-  const showLikes = document.getElementById('chk_likes').checked;
-  const showLink = document.getElementById('chk_link').checked;
-
-  resArea.innerHTML = slice.map(c => {
-    return `
-      <div class="rcard">
-        ${showVideo ? `<div class="vtag"><svg viewBox="0 0 24 24"><path d="M23 7s-.3-2-1.2-2.8C20.7 3 19.4 3 18.8 2.9 16.2 2.8 12 2.8 12 2.8s-4.2 0-6.8.1C4.6 3 3.3 3 2.2 4.2 1.3 5 1 7 1 7S.7 9.3.7 11.5v2.1c0 2.2.3 4.4.3 4.4s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.3 22.2 12 22.2 12 22.2s4.2 0 6.8-.3c.6-.1 1.9-.1 3-1.3.9-.8 1.2-2.8 1.2-2.8s.3-2.2.3-4.4v-2.1C23.3 9.3 23 7 23 7zm-13.8 8.9V8.1l8.1 3.9-8.1 3.9z"/></svg>${esc(c.videoTitle)}</div>` : ''}
-        <div class="rmeta">
-          ${showAuthor ? `<div class="avatar">${initials(c.author)}</div><span class="author">${esc(c.author)}</span>` : ''}
-          ${showDate && c.date ? `<span class="rdate">${fmtDate(c.date)}</span>` : ''}
-        </div>
-        <div class="rbody">${highlight(c.text, keywords)}</div>
-        <div class="rfoot">
-          ${showLikes && c.likes !== undefined ? `<span class="likes"><svg viewBox="0 0 24 24"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg>${c.likes}</span>` : ''}
-          ${showLink && c.url ? `<a class="rlink" href="${esc(c.url)}" target="_blank" rel="noopener">Ver no YouTube <svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>` : ''}
-        </div>
+  area.innerHTML = slice.map(c => `
+    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
+      ${shVid ? `<div class="mb-3"><span class="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold px-2 py-1 rounded truncate max-w-full"><svg class="w-3.5 h-3.5 text-brand-500 flex-shrink-0" viewBox="0 0 24 24"><path fill="currentColor" d="M23 7s-.3-2-1.2-2.8C20.7 3 19.4 3 18.8 2.9 16.2 2.8 12 2.8 12 2.8s-4.2 0-6.8.1C4.6 3 3.3 3 2.2 4.2 1.3 5 1 7 1 7S.7 9.3.7 11.5v2.1c0 2.2.3 4.4.3 4.4s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.3 22.2 12 22.2 12 22.2s4.2 0 6.8-.3c.6-.1 1.9-.1 3-1.3.9-.8 1.2-2.8 1.2-2.8s.3-2.2.3-4.4v-2.1C23.3 9.3 23 7 23 7zm-13.8 8.9V8.1l8.1 3.9-8.1 3.9z"/></svg> ${esc(c.videoTitle)}</span></div>` : ''}
+      
+      <div class="flex items-center gap-3 mb-2">
+        ${shAut ? `<div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold flex-shrink-0">${initials(c.author)}</div><span class="font-semibold text-sm text-slate-900">${esc(c.author)}</span>` : ''}
+        ${shDat && c.date ? `<span class="ml-auto text-xs text-slate-400 font-medium">${fmtDate(c.date)}</span>` : ''}
       </div>
-    `;
-  }).join('');
+      
+      <div class="text-slate-700 text-[14px] leading-relaxed break-words whitespace-pre-wrap">${highlight(c.text, keywords)}</div>
+      
+      <div class="flex items-center gap-4 mt-4 pt-3 border-t border-slate-50">
+        ${shLik && c.likes !== undefined ? `<span class="flex items-center gap-1.5 text-xs text-slate-500 font-medium"><svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="currentColor"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg> ${c.likes} likes</span>` : ''}
+        ${shLnk && c.url ? `<a href="${esc(c.url)}" target="_blank" class="ml-auto text-xs font-semibold text-brand-600 hover:text-brand-800 flex items-center gap-1">Ver Origem <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></a>` : ''}
+      </div>
+    </div>
+  `).join('');
 
   if (totalPages > 1) {
-    let pagHtml = `<button class="pag-btn" ${currentPage === 1 ? 'disabled' : ''} onclick="changePage(${currentPage - 1})">Anterior</button>`;
-    for (let i = 1; i <= totalPages; i++) {
-      if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
-        pagHtml += `<button class="pag-btn ${i === currentPage ? 'active' : ''}" onclick="changePage(${i})">${i}</button>`;
-      } else if (i === currentPage - 3 || i === currentPage + 3) {
-        pagHtml += `<span class="pag-info">...</span>`;
+    let pagH = `<button ${currentPage===1?'disabled':''} class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-medium ${currentPage===1?'text-slate-300':'text-slate-600 hover:bg-slate-100'}" onclick="changePage(${currentPage-1})">Ant</button>`;
+    for (let i=1; i<=totalPages; i++) {
+      if (i===1 || i===totalPages || (i>=currentPage-1 && i<=currentPage+1)) {
+        pagH += `<button class="w-8 h-8 rounded-lg text-sm font-medium border ${i===currentPage ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}" onclick="changePage(${i})">${i}</button>`;
+      } else if (i===currentPage-2 || i===currentPage+2) {
+        pagH += `<span class="text-slate-400 px-1">...</span>`;
       }
     }
-    pagHtml += `<button class="pag-btn" ${currentPage === totalPages ? 'disabled' : ''} onclick="changePage(${currentPage + 1})">Próxima</button>`;
-    pagArea.innerHTML = pagHtml;
-  } else {
-    pagArea.innerHTML = '';
-  }
+    pagH += `<button ${currentPage===totalPages?'disabled':''} class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-medium ${currentPage===totalPages?'text-slate-300':'text-slate-600 hover:bg-slate-100'}" onclick="changePage(${currentPage+1})">Próx</button>`;
+    pag.innerHTML = pagH;
+  } else { pag.innerHTML = ''; }
 }
 
-function changePage(p) {
-  currentPage = p;
-  renderResults();
-  document.getElementById('panelComments').scrollTo({ top: 0, behavior: 'smooth' });
-}
+function changePage(p) { currentPage = p; renderResults(); document.getElementById('panelComments').scrollTo({ top: 0, behavior: 'smooth' }); }
 
 function clearAll() {
-  allResults = [];
-  displayed = [];
-  currentPage = 1;
-  document.getElementById('progCard').classList.remove('on');
+  allResults = []; displayed = []; currentPage = 1;
+  document.getElementById('progCard').classList.add('hidden');
   document.getElementById('progList').innerHTML = '';
   document.getElementById('btnExport').classList.add('hidden');
   document.getElementById('btnClear').classList.add('hidden');
-  renderResults();
-  showToast('Resultados limpos com sucesso.');
+  document.getElementById('searchInline').value = '';
+  renderResults(); toast('Memória de busca limpa.');
 }
 
 function doExport() {
-  if (displayed.length === 0) {
-    showToast('Não há dados para exportar.');
-    return;
-  }
+  if (!displayed.length) return toast('Sem dados no filtro.');
+  const eXlsx = document.getElementById('exp_xlsx').checked;
+  const eCsv = document.getElementById('exp_csv').checked;
+  
+  const rows = displayed.map(c => ({ 'Vídeo': c.videoTitle||'', 'ID do Vídeo': c.videoId||'', 'Autor': c.author||'', 'Comentário': c.text||'', 'Data': c.date?fmtDate(c.date):'', 'Curtidas': c.likes||0, 'Link': c.url||'' }));
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Extração');
 
-  const exportXlsx = document.getElementById('exp_xlsx').checked;
-  const exportCsv = document.getElementById('exp_csv').checked;
-
-  const dataRows = displayed.map(c => ({
-    'Vídeo': c.videoTitle || '',
-    'ID do Vídeo': c.videoId || '',
-    'Autor': c.author || '',
-    'Comentário': c.text || '',
-    'Data': c.date ? fmtDate(c.date) : '',
-    'Curtidas': c.likes || 0,
-    'Link': c.url || ''
-  }));
-
-  const ws = XLSX.utils.json_to_sheet(dataRows);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Comentários');
-
-  if (exportXlsx) {
-    XLSX.writeFile(wb, 'comentarios_youtube.xlsx');
-  }
-  if (exportCsv || (!exportXlsx && !exportCsv)) {
-    XLSX.writeFile(wb, 'comentarios_youtube.csv', { bookType: 'csv' });
-  }
-
-  showToast('Exportação concluída com sucesso!');
+  if (eXlsx) XLSX.writeFile(wb, 'youtube_extracao.xlsx');
+  if (eCsv || (!eXlsx && !eCsv)) XLSX.writeFile(wb, 'youtube_extracao.csv', { bookType: 'csv' });
+  toast('Planilha exportada com sucesso!');
 }
 </script>
 </body>
