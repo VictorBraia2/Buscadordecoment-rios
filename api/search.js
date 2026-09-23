@@ -1,105 +1,67 @@
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  if (req.method === 'OPTIONS') return res.status(200).end();
+  const { q, order, maxResults, regionCode, publishedAfter, publishedBefore } = req.query;
+  const API_KEY = process.env.YOUTUBE_API_KEY;
 
-  const { q, order, maxResults, regionCode, dateFilter } = req.query;
-  if (!q || !q.trim()) return res.status(400).json({ error: 'Informe um termo de busca.' });
+  if (!API_KEY) {
+    return res.status(500).json({ error: "Chave da API do YouTube não configurada no servidor." });
+  }
 
-  const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'Chave de API não configurada no servidor.' });
+  const ytOrder = order === 'date' ? 'date' : 'viewCount';
+  const limit = maxResults ? parseInt(maxResults) : 20;
 
-  const requestedLimit = parseInt(maxResults) || 20;
-  const searchLimit = Math.max(requestedLimit, 50);
+  let searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&q=${encodeURIComponent(q)}&order=${ytOrder}&maxResults=${limit}&key=${API_KEY}`;
+
+  if (regionCode && regionCode !== 'ALL') {
+    searchUrl += `&regionCode=${encodeURIComponent(regionCode)}`;
+  }
   
-  const sortOrder = order === 'date' ? 'date' : 'relevance';
+  if (publishedAfter) {
+    searchUrl += `&publishedAfter=${encodeURIComponent(publishedAfter)}`;
+  }
+  if (publishedBefore) {
+    searchUrl += `&publishedBefore=${encodeURIComponent(publishedBefore)}`;
+  }
 
   try {
-    const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
-    searchUrl.searchParams.set('part', 'snippet');
-    searchUrl.searchParams.set('q', q.trim());
-    searchUrl.searchParams.set('type', 'video');
-    searchUrl.searchParams.set('order', sortOrder);
-    searchUrl.searchParams.set('maxResults', searchLimit);
-    searchUrl.searchParams.set('key', apiKey);
-
-    if (regionCode && regionCode !== 'ALL') {
-      searchUrl.searchParams.set('regionCode', regionCode);
-      if (regionCode === 'BR') {
-        searchUrl.searchParams.set('relevanceLanguage', 'pt');
-      }
-    }
-
-    if (dateFilter && dateFilter !== 'ALL') {
-      if (/^\d{4}$/.test(dateFilter)) {
-        const year = parseInt(dateFilter, 10);
-        const publishedAfter = new Date(year, 0, 1).toISOString();
-        const publishedBefore = new Date(year, 11, 31, 23, 59, 59).toISOString();
-        
-        searchUrl.searchParams.set('publishedAfter', publishedAfter);
-        searchUrl.searchParams.set('publishedBefore', publishedBefore);
-      } else {
-        const now = new Date();
-        if (dateFilter === 'year') {
-          now.setFullYear(now.getFullYear() - 1);
-        } else if (dateFilter === 'month') {
-          now.setMonth(now.getMonth() - 1);
-        } else if (dateFilter === 'week') {
-          now.setDate(now.getDate() - 7);
-        } else if (dateFilter === 'today') {
-          now.setDate(now.getDate() - 1);
-        }
-        searchUrl.searchParams.set('publishedAfter', now.toISOString());
-      }
-    }
-
-    const searchRes  = await fetch(searchUrl.toString());
+    const searchRes = await fetch(searchUrl);
     const searchData = await searchRes.json();
-    if (searchData.error) return res.status(400).json({ error: searchData.error.message });
 
-    const items = searchData.items || [];
-    if (!items.length) return res.status(200).json({ videos: [] });
+    if (searchData.error) {
+      throw new Error(searchData.error.message);
+    }
 
-    const ids      = items.map(i => i.id.videoId).join(',');
-    const statsUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
-    statsUrl.searchParams.set('part', 'statistics');
-    statsUrl.searchParams.set('id', ids);
-    statsUrl.searchParams.set('key', apiKey);
+    if (!searchData.items || searchData.items.length === 0) {
+      return res.status(200).json({ videos: [] });
+    }
 
-    const statsRes  = await fetch(statsUrl.toString());
+    const videoIds = searchData.items.map(item => item.id.videoId).join(',');
+    const statsUrl = `https://www.googleapis.com/youtube/v3/videos?part=statistics,contentDetails&id=${videoIds}&key=${API_KEY}`;
+
+    const statsRes = await fetch(statsUrl);
     const statsData = await statsRes.json();
 
-    const statsMap = {};
-    for (const item of (statsData.items || [])) {
-      statsMap[item.id] = {
-        views:    parseInt(item.statistics?.viewCount    || 0),
-        likes:    parseInt(item.statistics?.likeCount    || 0),
-        comments: parseInt(item.statistics?.commentCount || 0),
-      };
-    }
 
-    let videos = items.map(item => {
-      const id = item.id.videoId;
-      const s  = item.snippet;
-      const st = statsMap[id] || { views: 0, likes: 0, comments: 0 };
+    let videos = searchData.items.map((item, index) => {
+      const stats = statsData.items[index]?.statistics || {};
       return {
-        id,
-        title:       s.title,
-        channel:     s.channelTitle,
-        publishedAt: s.publishedAt,
-        thumbnail:   s.thumbnails?.medium?.url || s.thumbnails?.default?.url || '',
-        views:       st.views,
-        likes:       st.likes,
-        comments:    st.comments,
-        url:         `https://www.youtube.com/watch?v=${id}`,
+        id: item.id.videoId,
+        title: item.snippet.title,
+        channel: item.snippet.channelTitle,
+        thumbnail: item.snippet.thumbnails?.medium?.url || '',
+        url: `https://www.youtube.com/watch?v=${item.id.videoId}`,
+        views: parseInt(stats.viewCount || 0),
+        likes: parseInt(stats.likeCount || 0),
+        comments: parseInt(stats.commentCount || 0),
+        date: item.snippet.publishedAt
       };
     });
 
-    videos.sort((a, b) => b.views - a.views);
-    videos = videos.slice(0, requestedLimit);
+    if (ytOrder === 'viewCount') {
+      videos.sort((a, b) => b.views - a.views);
+    }
 
-    return res.status(200).json({ videos });
-  } catch (e) {
-    return res.status(500).json({ error: e.message });
+    res.status(200).json({ videos });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 }
