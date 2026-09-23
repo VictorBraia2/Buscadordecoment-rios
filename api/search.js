@@ -25,26 +25,7 @@ export default async function handler(req, res) {
   }
 
   const requestedLimit = parseInt(maxResults) || 20;
-  // Aumentamos o pool para 50 para ter margem ao descartar vídeos estrangeiros e Shorts
-  const fetchLimit = 50; 
   const ytOrder = order === 'date' ? 'date' : 'viewCount';
-
-  const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
-  searchUrl.searchParams.set('part', 'snippet');
-  searchUrl.searchParams.set('type', 'video');
-  searchUrl.searchParams.set('q', q.trim());
-  searchUrl.searchParams.set('order', ytOrder);
-  searchUrl.searchParams.set('maxResults', fetchLimit);
-  searchUrl.searchParams.set('key', API_KEY);
-
-  if (regionCode && regionCode !== 'ALL') {
-    searchUrl.searchParams.set('regionCode', regionCode);
-    if (regionCode === 'BR' || regionCode === 'PT') {
-      searchUrl.searchParams.set('relevanceLanguage', 'pt');
-    } else if (regionCode === 'US') {
-      searchUrl.searchParams.set('relevanceLanguage', 'en');
-    }
-  }
 
   let pAfter = publishedAfter;
   let pBefore = publishedBefore;
@@ -57,22 +38,52 @@ export default async function handler(req, res) {
     }
   }
 
-  if (pAfter) searchUrl.searchParams.set('publishedAfter', pAfter);
-  if (pBefore) searchUrl.searchParams.set('publishedBefore', pBefore);
-
   try {
-    const searchRes = await fetch(searchUrl.toString());
-    const searchData = await searchRes.json();
+    let items = [];
+    let nextPageToken = '';
+    
+    // Puxa 2 páginas (até 100 vídeos) para expandir a amostragem e capturar vídeos nacionais de alto acesso
+    for (let page = 0; page < 2; page++) {
+      const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
+      searchUrl.searchParams.set('part', 'snippet');
+      searchUrl.searchParams.set('type', 'video');
+      searchUrl.searchParams.set('q', q.trim());
+      searchUrl.searchParams.set('order', ytOrder);
+      searchUrl.searchParams.set('maxResults', '50');
+      searchUrl.searchParams.set('key', API_KEY);
 
-    if (searchData.error) {
-      return res.status(400).json({ error: searchData.error.message });
+      if (regionCode && regionCode !== 'ALL') {
+        searchUrl.searchParams.set('regionCode', regionCode);
+        if (regionCode === 'BR' || regionCode === 'PT') {
+          searchUrl.searchParams.set('relevanceLanguage', 'pt');
+        } else if (regionCode === 'US') {
+          searchUrl.searchParams.set('relevanceLanguage', 'en');
+        }
+      }
+
+      if (pAfter) searchUrl.searchParams.set('publishedAfter', pAfter);
+      if (pBefore) searchUrl.searchParams.set('publishedBefore', pBefore);
+      if (nextPageToken) searchUrl.searchParams.set('pageToken', nextPageToken);
+
+      const searchRes = await fetch(searchUrl.toString());
+      const searchData = await searchRes.json();
+
+      if (searchData.error) {
+        return res.status(400).json({ error: searchData.error.message });
+      }
+
+      const pageItems = searchData.items || [];
+      items.push(...pageItems);
+
+      nextPageToken = searchData.nextPageToken;
+      if (!nextPageToken || pageItems.length < 50) break;
     }
 
-    const items = searchData.items || [];
     if (!items.length) {
       return res.status(200).json({ videos: [] });
     }
 
+    // Consulta detalhes e estatísticas de todos os vídeos obtidos
     const ids = items.map(i => i.id.videoId).join(',');
     const statsUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
     statsUrl.searchParams.set('part', 'snippet,statistics,contentDetails');
@@ -96,19 +107,24 @@ export default async function handler(req, res) {
     }
 
     let videos = [];
+    const seenIds = new Set();
+
     for (const item of items) {
       const id = item.id.videoId;
+      if (seenIds.has(id)) continue;
+      seenIds.add(id);
+
       const s = item.snippet;
       const st = statsMap[id] || { views: 0, likes: 0, comments: 0, durationSec: 0, audioLang: '' };
       const titleLower = (s.title || '').toLowerCase();
 
-      // 1. Filtro de Shorts (ignora vídeos <= 60s ou com #shorts no título)
+      // 1. Filtro Anti-Shorts (descarta <= 60s ou títulos com #shorts)
       if (st.durationSec > 0 && st.durationSec <= 60) continue;
       if (titleLower.includes('#shorts') || titleLower.includes('#short')) continue;
 
-      // 2. Filtro estrito de idioma: se a região for BR/PT, descarta vídeos cujo áudio principal esteja marcado como inglês
-      if (regionCode === 'BR' || regionCode === 'PT') {
-        if (st.audioLang.startsWith('en')) continue;
+      // 2. Filtro de Idioma Tolerante: descarta apenas se for estritamente inglês marcado
+      if ((regionCode === 'BR' || regionCode === 'PT') && (st.audioLang === 'en' || st.audioLang === 'en-us')) {
+        continue;
       }
 
       videos.push({
@@ -125,6 +141,7 @@ export default async function handler(req, res) {
       });
     }
 
+    // Ordenação matemática por número de visualizações
     if (ytOrder === 'viewCount') {
       videos.sort((a, b) => b.views - a.views);
     }
