@@ -42,8 +42,7 @@ export default async function handler(req, res) {
     let items = [];
     let nextPageToken = '';
     
-    
-    for (let page = 0; page < 2; page++) {
+    for (let page = 0; page < 3; page++) {
       const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
       searchUrl.searchParams.set('part', 'snippet');
       searchUrl.searchParams.set('type', 'video');
@@ -117,13 +116,13 @@ export default async function handler(req, res) {
       const st = statsMap[id] || { views: 0, likes: 0, comments: 0, durationSec: 0, audioLang: '' };
       const titleLower = (s.title || '').toLowerCase();
 
-    
       if (st.durationSec > 0 && st.durationSec <= 60) continue;
       if (titleLower.includes('#shorts') || titleLower.includes('#short')) continue;
 
-     
-      if ((regionCode === 'BR' || regionCode === 'PT') && (st.audioLang === 'en' || st.audioLang === 'en-us')) {
-        continue;
+      if (regionCode === 'BR' || regionCode === 'PT') {
+        if (st.audioLang && !st.audioLang.startsWith('pt')) {
+          continue;
+        }
       }
 
       videos.push({
@@ -139,7 +138,7 @@ export default async function handler(req, res) {
         url: `https://www.youtube.com/watch?v=${id}`
       });
     }
-    
+
     if (ytOrder === 'viewCount') {
       videos.sort((a, b) => b.views - a.views);
     }
