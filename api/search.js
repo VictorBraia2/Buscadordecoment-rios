@@ -42,7 +42,7 @@ export default async function handler(req, res) {
     let items = [];
     let nextPageToken = '';
     
-    // Puxa 2 páginas (até 100 vídeos) para expandir a amostragem e capturar vídeos nacionais de alto acesso
+    
     for (let page = 0; page < 2; page++) {
       const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
       searchUrl.searchParams.set('part', 'snippet');
@@ -83,7 +83,6 @@ export default async function handler(req, res) {
       return res.status(200).json({ videos: [] });
     }
 
-    // Consulta detalhes e estatísticas de todos os vídeos obtidos
     const ids = items.map(i => i.id.videoId).join(',');
     const statsUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
     statsUrl.searchParams.set('part', 'snippet,statistics,contentDetails');
@@ -118,11 +117,11 @@ export default async function handler(req, res) {
       const st = statsMap[id] || { views: 0, likes: 0, comments: 0, durationSec: 0, audioLang: '' };
       const titleLower = (s.title || '').toLowerCase();
 
-      // 1. Filtro Anti-Shorts (descarta <= 60s ou títulos com #shorts)
+    
       if (st.durationSec > 0 && st.durationSec <= 60) continue;
       if (titleLower.includes('#shorts') || titleLower.includes('#short')) continue;
 
-      // 2. Filtro de Idioma Tolerante: descarta apenas se for estritamente inglês marcado
+     
       if ((regionCode === 'BR' || regionCode === 'PT') && (st.audioLang === 'en' || st.audioLang === 'en-us')) {
         continue;
       }
@@ -140,8 +139,7 @@ export default async function handler(req, res) {
         url: `https://www.youtube.com/watch?v=${id}`
       });
     }
-
-    // Ordenação matemática por número de visualizações
+    
     if (ytOrder === 'viewCount') {
       videos.sort((a, b) => b.views - a.views);
     }
