@@ -8,46 +8,6 @@ function parseISO8601Duration(duration) {
   return hours * 3600 + minutes * 60 + seconds;
 }
 
-function isForeignTitle(title) {
-  const lower = title.toLowerCase();
-  const foreignPatterns = [
-    /\bgone wrong\b/,
-    /\bmovie clip\b/,
-    /\bfull movie\b/,
-    /\bofficial video\b/,
-    /\bofficial audio\b/,
-    /\bpart \d+\b/,
-    /\bepisode \d+\b/,
-    /\binterview\b/,
-    /\bafrican home\b/,
-    /\bgreen pill\b/,
-    /\bblue pill\b/,
-    /\bvale la pena\b/,
-    /\bmadre soltera\b/,
-    /\bla controversia\b/,
-    /\bel amor\b/,
-    /\bcon una\b/,
-    /\bestar con\b/
-  ];
-
-  for (const pattern of foreignPatterns) {
-    if (pattern.test(lower)) return true;
-  }
-  return false;
-}
-
-function isPortugueseText(title, description = '') {
-  const text = (title + ' ' + description).toLowerCase();
-  if (/[áàâãéêíóôõúç]/.test(text)) return true;
-  
-  const ptWords = ['\bde\b', '\bdo\b', '\bda\b', '\bdos\b', '\bdas\b', '\bem\b', '\bno\b', '\bna\b', '\bum\b', '\buma\b', '\bcom\b', '\bnao\b', '\bnão\b', '\bpara\b', '\bpor\b', '\bmais\b', '\bcomo\b', '\bse\b', '\bque\b', '\bsobre\b', '\bcortes\b', '\bpodcast\b'];
-  let matches = 0;
-  for (const word of ptWords) {
-    if (new RegExp(word).test(text)) matches++;
-  }
-  return matches >= 1;
-}
-
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -133,8 +93,7 @@ export default async function handler(req, res) {
         likes: parseInt(item.statistics?.likeCount || 0),
         comments: parseInt(item.statistics?.commentCount || 0),
         durationSec: durationSec,
-        audioLang: audioLang,
-        description: item.snippet?.description || ''
+        audioLang: audioLang
       };
     }
 
@@ -147,20 +106,12 @@ export default async function handler(req, res) {
       seenIds.add(id);
 
       const s = item.snippet;
-      const st = statsMap[id] || { views: 0, likes: 0, comments: 0, durationSec: 0, audioLang: '', description: '' };
+      const st = statsMap[id] || { views: 0, likes: 0, comments: 0, durationSec: 0, audioLang: '' };
 
       if (st.durationSec <= 65) continue;
 
       if (regionCode === 'BR' || regionCode === 'PT') {
-        if (st.audioLang && !st.audioLang.startsWith('pt')) {
-          continue;
-        }
-
-        if (isForeignTitle(s.title)) {
-          continue;
-        }
-
-        if (!st.audioLang && !isPortugueseText(s.title, st.description)) {
+        if (st.audioLang.startsWith('en') || st.audioLang.startsWith('es')) {
           continue;
         }
       }
