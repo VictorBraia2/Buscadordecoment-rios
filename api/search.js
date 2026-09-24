@@ -22,7 +22,6 @@ export default async function handler(req, res) {
   const requestedLimit = parseInt(maxResults) || 20;
   const isDateOrder = order === 'date';
   const apiOrder = isDateOrder ? 'date' : 'relevance';
-  const finalQuery = q.trim() + ' -shorts';
 
   let pAfter = publishedAfter;
   let pBefore = publishedBefore;
@@ -43,7 +42,7 @@ export default async function handler(req, res) {
       const searchUrl = new URL('https://www.googleapis.com/youtube/v3/search');
       searchUrl.searchParams.set('part', 'snippet');
       searchUrl.searchParams.set('type', 'video');
-      searchUrl.searchParams.set('q', finalQuery);
+      searchUrl.searchParams.set('q', q.trim());
       searchUrl.searchParams.set('order', apiOrder);
       searchUrl.searchParams.set('maxResults', '50');
       searchUrl.searchParams.set('key', API_KEY);
@@ -87,13 +86,11 @@ export default async function handler(req, res) {
     const statsMap = {};
     for (const item of (statsData.items || [])) {
       const durationSec = parseISO8601Duration(item.contentDetails?.duration);
-      const audioLang = (item.snippet?.defaultAudioLanguage || item.snippet?.defaultLanguage || '').toLowerCase();
       statsMap[item.id] = {
         views: parseInt(item.statistics?.viewCount || 0),
         likes: parseInt(item.statistics?.likeCount || 0),
         comments: parseInt(item.statistics?.commentCount || 0),
-        durationSec: durationSec,
-        audioLang: audioLang
+        durationSec: durationSec
       };
     }
 
@@ -106,15 +103,11 @@ export default async function handler(req, res) {
       seenIds.add(id);
 
       const s = item.snippet;
-      const st = statsMap[id] || { views: 0, likes: 0, comments: 0, durationSec: 0, audioLang: '' };
+      const st = statsMap[id] || { views: 0, likes: 0, comments: 0, durationSec: 0 };
+      const titleLower = (s.title || '').toLowerCase();
 
-      if (st.durationSec <= 65) continue;
-
-      if (regionCode === 'BR' || regionCode === 'PT') {
-        if (st.audioLang.startsWith('en') || st.audioLang.startsWith('es')) {
-          continue;
-        }
-      }
+      if (st.durationSec > 0 && st.durationSec <= 60) continue;
+      if (titleLower.includes('#shorts') || titleLower.includes('#short')) continue;
 
       videos.push({
         id,
