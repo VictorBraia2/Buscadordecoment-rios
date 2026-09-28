@@ -74,24 +74,27 @@ export default async function handler(req, res) {
 
     if (!items.length) return res.status(200).json({ videos: [] });
 
-    const ids = items.map(i => i.id.videoId).join(',');
-    const statsUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
-    statsUrl.searchParams.set('part', 'snippet,statistics,contentDetails');
-    statsUrl.searchParams.set('id', ids);
-    statsUrl.searchParams.set('key', API_KEY);
-
-    const statsRes = await fetch(statsUrl.toString());
-    const statsData = await statsRes.json();
-
     const statsMap = {};
-    for (const item of (statsData.items || [])) {
-      const durationSec = parseISO8601Duration(item.contentDetails?.duration);
-      statsMap[item.id] = {
-        views: parseInt(item.statistics?.viewCount || 0),
-        likes: parseInt(item.statistics?.likeCount || 0),
-        comments: parseInt(item.statistics?.commentCount || 0),
-        durationSec: durationSec
-      };
+
+    for (let i = 0; i < items.length; i += 50) {
+      const chunkIds = items.slice(i, i + 50).map(item => item.id.videoId).join(',');
+      const statsUrl = new URL('https://www.googleapis.com/youtube/v3/videos');
+      statsUrl.searchParams.set('part', 'snippet,statistics,contentDetails');
+      statsUrl.searchParams.set('id', chunkIds);
+      statsUrl.searchParams.set('key', API_KEY);
+
+      const statsRes = await fetch(statsUrl.toString());
+      const statsData = await statsRes.json();
+
+      for (const item of (statsData.items || [])) {
+        const durationSec = parseISO8601Duration(item.contentDetails?.duration);
+        statsMap[item.id] = {
+          views: parseInt(item.statistics?.viewCount || 0),
+          likes: parseInt(item.statistics?.likeCount || 0),
+          comments: parseInt(item.statistics?.commentCount || 0),
+          durationSec: durationSec
+        };
+      }
     }
 
     let videos = [];
