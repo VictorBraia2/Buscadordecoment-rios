@@ -3,43 +3,63 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { videoId, pageToken } = req.query;
-  if (!videoId || !/^[\w-]{11}$/.test(videoId)) {
-    return res.status(400).json({ error: 'videoId inválido' });
+  const { url } = req.query;
+  const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
+
+  if (!YOUTUBE_API_KEY) {
+    return res.status(500).json({ error: "Chave YOUTUBE_API_KEY não configurada no servidor." });
   }
 
-  const apiKey = process.env.YOUTUBE_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: 'Chave de API não configurada no servidor' });
+  function extractVideoId(input) {
+    if (!input) return null;
+    const str = input.trim();
+    if (str.length === 11 && !str.includes('/') && !str.includes('?')) return str;
+    
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = str.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+  }
+
+  const videoId = extractVideoId(url);
+
+  if (!videoId) {
+    return res.status(400).json({ error: "videoId inválido" });
+  }
 
   try {
-    const url = new URL('https://www.googleapis.com/youtube/v3/commentThreads');
-    url.searchParams.set('part', 'snippet');
-    url.searchParams.set('videoId', videoId);
-    url.searchParams.set('maxResults', '100');
-    url.searchParams.set('key', apiKey);
-    if (pageToken) url.searchParams.set('pageToken', pageToken);
+    let videoTitle = "";
+    try {
+      const vRes = await fetch(`https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${YOUTUBE_API_KEY}`);
+      const vData = await vRes.json();
+      if (vData.items && vData.items.length > 0) {
+        videoTitle = vData.items[0].snippet.title;
+      }
+    } catch (e) {
+      console.error("Erro ao obter título do vídeo:", e);
+    }
 
-    const response = await fetch(url.toString());
+    const commentsUrl = `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&maxResults=100&order=relevance&key=${YOUTUBE_API_KEY}`;
+    const response = await fetch(commentsUrl);
     const data = await response.json();
 
-    if (data.error) return res.status(400).json({ error: data.error.message });
+    if (data.error) {
+      return res.status(400).json({ error: data.error.message || "Erro na API do YouTube" });
+    }
 
     const comments = (data.items || []).map(item => {
-      const s = item.snippet.topLevelComment.snippet;
+      const top = item.snippet.topLevelComment.snippet;
       return {
         id: item.id,
-        text: s.textDisplay || s.textOriginal || '',
-        author: s.authorDisplayName || '',
-        date: s.publishedAt || '',
-        likes: s.likeCount || 0,
-        videoId
+        author: top.authorDisplayName,
+        text: top.textDisplay,
+        likes: top.likeCount,
+        publishedAt: top.publishedAt,
+        videoTitle: videoTitle,
+        url: `https://www.youtube.com/watch?v=${videoId}`
       };
     });
 
-    return res.status(200).json({
-      comments,
-      nextPageToken: data.nextPageToken || null
-    });
+    return res.status(200).json({ comments });
   } catch (e) {
     return res.status(500).json({ error: e.message });
   }
