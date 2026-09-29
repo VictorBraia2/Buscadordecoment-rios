@@ -226,16 +226,16 @@
 </main>
 
 <script>
-// CONFIGURAÇÃO DO SUPABASE
+// CONFIGURAÇÃO SEGURA DO SUPABASE
 const SUPABASE_URL = "SUA_SUPABASE_URL_AQUI";
 const SUPABASE_ANON_KEY = "SUA_SUPABASE_ANON_KEY_AQUI";
 
 let supabase = null;
-if (window.supabase && typeof window.supabase.createClient === 'function') {
+if (window.supabase && typeof window.supabase.createClient === 'function' && SUPABASE_URL.startsWith("https://")) {
   try {
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   } catch (e) {
-    console.warn("Supabase não inicializado:", e);
+    console.warn("Supabase não pôde ser iniciado:", e);
   }
 }
 
@@ -246,9 +246,9 @@ let currentQuery = '';
 let allResults = [];
 let keywords = [];
 
-// AUTENTICAÇÃO SUPABASE OAUTH
+// AUTENTICAÇÃO
 async function loginWithGoogle() {
-  if (!supabase) return alert("Erro: Supabase não configurado. Insira suas chaves no código.");
+  if (!supabase) return alert("Por favor, preencha as variáveis SUPABASE_URL e SUPABASE_ANON_KEY válidas no código.");
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin }
@@ -270,20 +270,23 @@ async function getAuthToken() {
 
 window.addEventListener('DOMContentLoaded', async () => {
   if (!supabase) return;
-  const { data: { user } } = await supabase.auth.getUser();
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      document.getElementById('loggedOutView').classList.add('hidden');
+      document.getElementById('loggedInView').classList.remove('hidden');
 
-  if (user) {
-    document.getElementById('loggedOutView').classList.add('hidden');
-    document.getElementById('loggedInView').classList.remove('hidden');
+      document.getElementById('userName').textContent = user.user_metadata.full_name || 'Usuário';
+      document.getElementById('userEmail').textContent = user.email;
+      document.getElementById('userAvatar').src = user.user_metadata.avatar_url || 'https://via.placeholder.com/40';
 
-    document.getElementById('userName').textContent = user.user_metadata.full_name || 'Usuário';
-    document.getElementById('userEmail').textContent = user.email;
-    document.getElementById('userAvatar').src = user.user_metadata.avatar_url || 'https://via.placeholder.com/40';
-
-    renderHistoryUI();
-  } else {
-    document.getElementById('loggedOutView').classList.remove('hidden');
-    document.getElementById('loggedInView').classList.add('hidden');
+      renderHistoryUI();
+    } else {
+      document.getElementById('loggedOutView').classList.remove('hidden');
+      document.getElementById('loggedInView').classList.add('hidden');
+    }
+  } catch (e) {
+    console.warn("Erro ao buscar dados do usuário:", e);
   }
 });
 
@@ -349,7 +352,6 @@ function fmtNum(n) {
   if (n >= 1e3) return (n/1e3).toFixed(1).replace('.0','') + 'K';
   return String(n);
 }
-function initials(n) { return (n||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?'; }
 function fmtDate(iso) { try { return new Date(iso).toLocaleDateString('pt-BR'); } catch { return iso; } }
 
 function toast(msg) {
@@ -640,10 +642,7 @@ function renderVideos() {
 }
 
 function exportToExcel(videos, queryTerm) {
-  if (!videos || !videos.length) {
-    showErr('Nenhum vídeo disponível para exportar.');
-    return;
-  }
+  if (!videos || !videos.length) return showErr('Nenhum vídeo disponível para exportar.');
 
   const formattedData = videos.map((v, index) => {
     const engRate = v.views > 0 ? (((v.likes + v.comments) / v.views) * 100).toFixed(2) : '0.00';
@@ -674,10 +673,7 @@ function exportToExcel(videos, queryTerm) {
 }
 
 function exportToPowerPoint(videos, queryTerm) {
-  if (!videos || !videos.length) {
-    showErr('Nenhum vídeo disponível para exportar.');
-    return;
-  }
+  if (!videos || !videos.length) return showErr('Nenhum vídeo disponível para exportar.');
 
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_16x9';
@@ -760,10 +756,7 @@ function exportToPowerPoint(videos, queryTerm) {
 }
 
 function exportCommentsToExcel(comments) {
-  if (!comments || !comments.length) {
-    showErr('Não há comentários para exportar.');
-    return;
-  }
+  if (!comments || !comments.length) return showErr('Não há comentários para exportar.');
 
   const totalLikes = comments.reduce((acc, c) => acc + (c.likes || 0), 0);
   const avgLikes = (totalLikes / comments.length).toFixed(1);
@@ -794,7 +787,6 @@ function exportCommentsToExcel(comments) {
   });
 
   const worksheet = XLSX.utils.aoa_to_sheet(excelRows);
-
   worksheet['!cols'] = [
     { wch: 6 },
     { wch: 22 },
@@ -812,10 +804,7 @@ function exportCommentsToExcel(comments) {
 }
 
 function exportCommentsToPowerPoint(comments) {
-  if (!comments || !comments.length) {
-    showErr('Não há comentários para exportar.');
-    return;
-  }
+  if (!comments || !comments.length) return showErr('Não há comentários para exportar.');
 
   const pptx = new PptxGenJS();
   pptx.layout = 'LAYOUT_16x9';
@@ -895,11 +884,7 @@ function doExport() {
   const isXlsx = document.getElementById('exp_xlsx').checked;
   const isPptx = document.getElementById('exp_pptx').checked;
 
-  if (!isXlsx && !isPptx) {
-    showErr('Selecione pelo menos um formato de exportação (.xlsx ou .pptx).');
-    return;
-  }
-
+  if (!isXlsx && !isPptx) return showErr('Selecione pelo menos um formato de exportação.');
   hideErr();
 
   if (document.getElementById('panelVideos').style.display === 'block') {
