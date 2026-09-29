@@ -1,9 +1,15 @@
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
 
-  const { url } = req.query;
+  if (req.method !== 'POST' && req.method !== 'GET') {
+    return res.status(405).json({ error: `Método ${req.method} não permitido` });
+  }
+
+  // Captura do corpo da requisição (POST) com fallback para query string
+  const { url, keywords } = req.body || req.query || {};
   const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
   if (!YOUTUBE_API_KEY) {
@@ -46,7 +52,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: data.error.message || "Erro na API do YouTube" });
     }
 
-    const comments = (data.items || []).map(item => {
+    let comments = (data.items || []).map(item => {
       const top = item.snippet.topLevelComment.snippet;
       return {
         id: item.id,
@@ -58,6 +64,14 @@ export default async function handler(req, res) {
         url: `https://www.youtube.com/watch?v=${videoId}`
       };
     });
+
+    // Filtrar por palavras-chave se o utilizador as definiu
+    if (Array.isArray(keywords) && keywords.length > 0) {
+      comments = comments.filter(c => {
+        const textLower = (c.text || '').toLowerCase();
+        return keywords.some(kw => textLower.includes(kw.toLowerCase()));
+      });
+    }
 
     return res.status(200).json({ comments });
   } catch (e) {
