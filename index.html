@@ -226,14 +226,14 @@
 </main>
 
 <script>
-// CONFIGURAÇÃO DO SUPABASE
+// CONFIGURAÇÃO DO SUPABASE (Variável única e segura)
 const SUPABASE_URL = "SUA_SUPABASE_URL_AQUI";
 const SUPABASE_ANON_KEY = "SUA_SUPABASE_ANON_KEY_AQUI";
 
-let supabase = null;
+let sbClient = null;
 if (window.supabase && typeof window.supabase.createClient === 'function' && SUPABASE_URL.startsWith("https://")) {
   try {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   } catch (e) {
     console.warn("Supabase não pôde ser iniciado:", e);
   }
@@ -248,8 +248,8 @@ let keywords = [];
 
 // AUTENTICAÇÃO
 async function loginWithGoogle() {
-  if (!supabase) return alert("Por favor, preencha as variáveis SUPABASE_URL e SUPABASE_ANON_KEY válidas no código.");
-  const { error } = await supabase.auth.signInWithOAuth({
+  if (!sbClient) return alert("Por favor, preencha as variáveis SUPABASE_URL e SUPABASE_ANON_KEY válidas no código.");
+  const { error } = await sbClient.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin }
   });
@@ -257,21 +257,21 @@ async function loginWithGoogle() {
 }
 
 async function logout() {
-  if (!supabase) return;
-  await supabase.auth.signOut();
+  if (!sbClient) return;
+  await sbClient.auth.signOut();
   window.location.reload();
 }
 
 async function getAuthToken() {
-  if (!supabase) return null;
-  const { data: { session } } = await supabase.auth.getSession();
+  if (!sbClient) return null;
+  const { data: { session } } = await sbClient.auth.getSession();
   return session ? session.access_token : null;
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
-  if (!supabase) return;
+  if (!sbClient) return;
   try {
-    const { data: { user } } = await supabase.auth.getUser();
+    const { data: { user } } = await sbClient.auth.getUser();
     if (user) {
       document.getElementById('loggedOutView').classList.add('hidden');
       document.getElementById('loggedInView').classList.remove('hidden');
