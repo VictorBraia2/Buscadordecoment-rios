@@ -39,7 +39,7 @@
   <!-- SEÇÃO DE AUTENTICAÇÃO SUPABASE -->
   <div id="authSection" class="p-4 border-b border-slate-200 bg-slate-50">
     <div id="loggedOutView">
-      <button onclick="loginWithGoogle()" class="w-full bg-white hover:bg-slate-100 text-slate-700 font-semibold py-2 px-3 border border-slate-300 rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all text-xs">
+      <button type="button" onclick="loginWithGoogle()" class="w-full bg-white hover:bg-slate-100 text-slate-700 font-semibold py-2 px-3 border border-slate-300 rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all text-xs cursor-pointer">
         <svg class="w-4 h-4" viewBox="0 0 24 24">
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
           <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -58,7 +58,7 @@
           <p id="userEmail" class="text-[10px] text-slate-500 truncate"></p>
         </div>
       </div>
-      <button onclick="logout()" class="text-xs text-red-500 hover:text-red-700 font-semibold ml-2 flex-shrink-0">Sair</button>
+      <button type="button" onclick="logout()" class="text-xs text-red-500 hover:text-red-700 font-semibold ml-2 flex-shrink-0 cursor-pointer">Sair</button>
     </div>
   </div>
 
@@ -73,7 +73,7 @@
       <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Filtro de Palavras</label>
       <div class="flex gap-2">
         <input type="text" id="kwInput" placeholder="Ex: inteligência..." class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none shadow-sm" />
-        <button onclick="addKw()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 rounded-lg text-sm font-medium transition-colors border border-slate-200">Add</button>
+        <button type="button" onclick="addKw()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 rounded-lg text-sm font-medium transition-colors border border-slate-200 cursor-pointer">Add</button>
       </div>
       <div id="tagArea" class="flex flex-wrap gap-1.5 mt-2 min-h-[24px]">
         <span class="text-xs text-slate-400">Sem filtros (exibe todos)</span>
@@ -100,16 +100,16 @@
       <div>
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Ordenar por</label>
         <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-          <button id="orderRel" class="flex-1 py-1.5 text-xs font-medium rounded-md bg-white shadow-sm text-brand-600 border border-slate-200" onclick="setOrder('relevance')">Visualizações</button>
-          <button id="orderDate" class="flex-1 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-700" onclick="setOrder('date')">Recentes</button>
+          <button type="button" id="orderRel" class="flex-1 py-1.5 text-xs font-medium rounded-md bg-white shadow-sm text-brand-600 border border-slate-200" onclick="setOrder('relevance')">Visualizações</button>
+          <button type="button" id="orderDate" class="flex-1 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-700" onclick="setOrder('date')">Recentes</button>
         </div>
       </div>
       <div>
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Resultados</label>
         <div class="flex gap-2">
-          <button id="cnt10" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100" onclick="setCount(10)">10</button>
-          <button id="cnt20" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-brand-500 bg-brand-50 text-brand-700" onclick="setCount(20)">20</button>
-          <button id="cnt50" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100" onclick="setCount(50)">50</button>
+          <button type="button" id="cnt10" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100" onclick="setCount(10)">10</button>
+          <button type="button" id="cnt20" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-brand-500 bg-brand-50 text-brand-700" onclick="setCount(20)">20</button>
+          <button type="button" id="cnt50" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100" onclick="setCount(50)">50</button>
         </div>
       </div>
     </div>
@@ -142,7 +142,7 @@
     <div id="cardHistory" class="space-y-2 border-t border-slate-200 pt-4 hidden">
       <div class="flex items-center justify-between">
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Histórico de Pesquisas</label>
-        <button onclick="clearSearchHistory()" class="text-[11px] text-red-500 hover:underline">Limpar</button>
+        <button type="button" onclick="clearSearchHistory()" class="text-[11px] text-red-500 hover:underline">Limpar</button>
       </div>
       <div id="historyListContainer" class="space-y-1.5 max-h-48 overflow-y-auto text-xs"></div>
     </div>
@@ -152,12 +152,12 @@
         <span class="font-bold">⚠</span><span id="errorMsg"></span>
       </div>
 
-      <button id="btnSearch" onclick="doSearch()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm">
+      <button type="button" id="btnSearch" onclick="doSearch()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
         Extrair Comentários
       </button>
 
-      <button id="btnVideoSearch" onclick="doVideoSearch()" class="hidden w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 px-4 rounded-xl items-center justify-center gap-2 transition-all shadow-sm">
+      <button type="button" id="btnVideoSearch" onclick="doVideoSearch()" class="hidden w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 px-4 rounded-xl items-center justify-center gap-2 transition-all shadow-sm cursor-pointer">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
         Buscar Vídeos
       </button>
@@ -171,12 +171,12 @@
             <input type="checkbox" id="exp_pptx" class="accent-brand-500 w-4 h-4"> Slide (.pptx)
           </label>
         </div>
-        <button id="btnExport" onclick="doExport()" class="hidden w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all shadow-sm text-sm">
+        <button type="button" id="btnExport" onclick="doExport()" class="hidden w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all shadow-sm text-sm cursor-pointer">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Exportar Relatório
         </button>
       </div>
 
-      <button id="btnClear" onclick="clearAll()" class="hidden w-full text-slate-400 hover:text-red-500 font-medium py-2 text-sm transition-colors">Limpar Sessão</button>
+      <button type="button" id="btnClear" onclick="clearAll()" class="hidden w-full text-slate-400 hover:text-red-500 font-medium py-2 text-sm transition-colors cursor-pointer">Limpar Sessão</button>
     </div>
   </div>
 </aside>
@@ -184,8 +184,8 @@
 <main class="flex-1 flex flex-col h-1/2 md:h-full relative overflow-hidden bg-slate-50">
   
   <header class="bg-white border-b border-slate-200 px-6 pt-4 flex gap-6">
-    <button id="tabComments" onclick="switchTab('comments')" class="pb-3 text-sm font-medium border-b-2 border-brand-500 text-brand-600 transition-colors">Comentários (Alvos)</button>
-    <button id="tabVideos" onclick="switchTab('videos')" class="pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors">Pesquisa de Vídeos</button>
+    <button type="button" id="tabComments" onclick="switchTab('comments')" class="pb-3 text-sm font-medium border-b-2 border-brand-500 text-brand-600 transition-colors cursor-pointer">Comentários (Alvos)</button>
+    <button type="button" id="tabVideos" onclick="switchTab('videos')" class="pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors cursor-pointer">Pesquisa de Vídeos</button>
   </header>
 
   <div id="panelComments" class="flex-1 overflow-y-auto p-6 md:p-8">
@@ -229,7 +229,15 @@
 // CONFIGURAÇÃO DO SUPABASE
 const SUPABASE_URL = "SUA_SUPABASE_URL_AQUI";
 const SUPABASE_ANON_KEY = "SUA_SUPABASE_ANON_KEY_AQUI";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let supabase = null;
+if (window.supabase && typeof window.supabase.createClient === 'function') {
+  try {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  } catch (e) {
+    console.warn("Supabase não inicializado:", e);
+  }
+}
 
 let videoOrder = 'relevance';
 let videoCount = 20;
@@ -240,6 +248,7 @@ let keywords = [];
 
 // AUTENTICAÇÃO SUPABASE OAUTH
 async function loginWithGoogle() {
+  if (!supabase) return alert("Erro: Supabase não configurado. Insira suas chaves no código.");
   const { error } = await supabase.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin }
@@ -248,16 +257,19 @@ async function loginWithGoogle() {
 }
 
 async function logout() {
+  if (!supabase) return;
   await supabase.auth.signOut();
   window.location.reload();
 }
 
 async function getAuthToken() {
+  if (!supabase) return null;
   const { data: { session } } = await supabase.auth.getSession();
   return session ? session.access_token : null;
 }
 
 window.addEventListener('DOMContentLoaded', async () => {
+  if (!supabase) return;
   const { data: { user } } = await supabase.auth.getUser();
 
   if (user) {
@@ -278,8 +290,8 @@ window.addEventListener('DOMContentLoaded', async () => {
 function switchTab(tab) {
   const isC = (tab === 'comments');
   
-  document.getElementById('tabComments').className = `pb-3 text-sm font-medium border-b-2 transition-colors ${isC ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`;
-  document.getElementById('tabVideos').className = `pb-3 text-sm font-medium border-b-2 transition-colors ${!isC ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`;
+  document.getElementById('tabComments').className = `pb-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${isC ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`;
+  document.getElementById('tabVideos').className = `pb-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${!isC ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`;
   
   document.getElementById('panelComments').style.display = isC ? 'block' : 'none';
   document.getElementById('panelVideos').style.display = !isC ? 'block' : 'none';
@@ -480,7 +492,7 @@ function renderTags() {
   area.innerHTML = keywords.map(k => `
     <span class="inline-flex items-center gap-1 bg-brand-50 text-brand-700 text-xs px-2 py-1 rounded-md border border-brand-100 font-medium">
       ${esc(k)}
-      <button onclick="removeKw('${esc(k)}')" class="hover:text-brand-900 font-bold">&times;</button>
+      <button type="button" onclick="removeKw('${esc(k)}')" class="hover:text-brand-900 font-bold ml-1">&times;</button>
     </span>
   `).join('');
 }
@@ -617,7 +629,7 @@ function renderVideos() {
             </div>
           </div>
           <div class="p-4 pt-0">
-            <button onclick="sendToComments('${v.url}')" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs transition-colors">
+            <button type="button" onclick="sendToComments('${v.url}')" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs transition-colors cursor-pointer">
               Extrair Comentários Deste Vídeo
             </button>
           </div>
