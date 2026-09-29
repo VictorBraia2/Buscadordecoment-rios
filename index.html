@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Buscador de Comentários & Vídeos — Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>
@@ -111,6 +112,14 @@
       </div>
     </div>
 
+    <div id="cardHistory" class="space-y-2 border-t border-slate-200 pt-4 hidden">
+      <div class="flex items-center justify-between">
+        <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Histórico de Pesquisas</label>
+        <button onclick="clearSearchHistory()" class="text-[11px] text-red-500 hover:underline">Limpar</button>
+      </div>
+      <div id="historyListContainer" class="space-y-1.5 max-h-48 overflow-y-auto text-xs"></div>
+    </div>
+
     <div class="pt-4 border-t border-slate-200 space-y-2 mt-auto">
       <div id="errorBox" class="hidden items-start gap-2 bg-red-50 text-red-700 text-xs p-3 rounded-lg border border-red-200 mb-4">
         <span class="font-bold">⚠</span><span id="errorMsg"></span>
@@ -132,7 +141,7 @@
           <label class="flex items-center gap-1.5"><input type="checkbox" id="exp_csv" class="accent-brand-500 w-4 h-4"> CSV</label>
         </div>
         <button id="btnExport" onclick="doExport()" class="hidden w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all shadow-sm text-sm">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Exportar Dados
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Exportar Comentários
         </button>
       </div>
 
@@ -188,6 +197,10 @@
 <script>
 let videoOrder = 'relevance';
 let videoCount = 20;
+let currentVideos = [];
+let currentQuery = '';
+
+const HISTORY_KEY = 'yt_analyzer_search_history';
 
 function switchTab(tab) {
   const isC = (tab === 'comments');
@@ -205,6 +218,7 @@ function switchTab(tab) {
   
   document.getElementById('cardVideoSearch').style.display = isC ? 'none' : 'block';
   document.getElementById('cardVideoFilters').style.display = isC ? 'none' : 'block';
+  document.getElementById('cardHistory').style.display = isC ? 'none' : 'block';
   
   document.getElementById('btnSearch').style.display = isC ? 'flex' : 'none';
   document.getElementById('btnVideoSearch').style.display = isC ? 'none' : 'flex';
@@ -271,6 +285,191 @@ function sendToComments(url) {
   toast('Adicionado à fila de extração!');
 }
 
+function saveSearchToHistory(params, totalResults) {
+  const history = getSearchHistory();
+  const newEntry = {
+    id: Date.now(),
+    timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
+    query: params.q,
+    region: params.regionCode || 'BR',
+    year: params.dateFilter || 'ALL',
+    totalResults: totalResults,
+    params: params
+  };
+
+  const filtered = history.filter(item => 
+    !(item.query.toLowerCase() === params.q.toLowerCase() && item.region === params.regionCode && item.year === params.dateFilter)
+  );
+
+  const updatedHistory = [newEntry, ...filtered].slice(0, 20);
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
+  renderHistoryUI();
+}
+
+function getSearchHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+  } catch (e) {
+    return [];
+  }
+}
+
+function clearSearchHistory() {
+  localStorage.removeItem(HISTORY_KEY);
+  renderHistoryUI();
+}
+
+function renderHistoryUI() {
+  const container = document.getElementById('historyListContainer');
+  if (!container) return;
+
+  const history = getSearchHistory();
+  if (!history.length) {
+    container.innerHTML = '<p class="text-slate-400 p-1">Nenhum histórico registrado.</p>';
+    return;
+  }
+
+  container.innerHTML = history.map(item => `
+    <div class="p-2 hover:bg-slate-100 rounded-lg border border-slate-100 transition-colors cursor-pointer flex justify-between items-center group" onclick='loadSearchFromHistory(${JSON.stringify(item.params)})'>
+      <div class="truncate pr-2">
+        <div class="font-semibold text-slate-800 truncate">${esc(item.query)}</div>
+        <div class="text-[10px] text-slate-400">${item.region} • ${item.year} • ${item.totalResults} vids</div>
+      </div>
+      <span class="text-[10px] text-slate-400 flex-shrink-0">${item.timestamp}</span>
+    </div>
+  `).join('');
+}
+
+function loadSearchFromHistory(params) {
+  if (!params) return;
+  if (params.q) document.getElementById('videoQuery').value = params.q;
+  if (params.regionCode) document.getElementById('regionSelect').value = params.regionCode;
+  if (params.dateFilter) document.getElementById('dateSelect').value = params.dateFilter;
+  if (params.order) setOrder(params.order);
+  if (params.maxResults) setCount(params.maxResults);
+  doVideoSearch();
+}
+
+function exportToExcel(videos, queryTerm) {
+  if (!videos || !videos.length) {
+    showErr('Nenhum vídeo disponível para exportar.');
+    return;
+  }
+
+  const formattedData = videos.map((v, index) => {
+    const engRate = v.views > 0 ? (((v.likes + v.comments) / v.views) * 100).toFixed(2) : '0.00';
+    return {
+      "Posição": `#${index + 1}`,
+      "Título do Vídeo": v.title,
+      "Canal": v.channel,
+      "Visualizações": v.views,
+      "Curtidas": v.likes,
+      "Comentários": v.comments,
+      "Taxa Engajamento (%)": `${engRate}%`,
+      "Duração (s)": v.duration,
+      "Data Publicação": fmtDate(v.publishedAt),
+      "Link": v.url
+    };
+  });
+
+  const worksheet = XLSX.utils.json_to_sheet(formattedData);
+  worksheet['!cols'] = [
+    { wch: 8 }, { wch: 45 }, { wch: 25 }, { wch: 15 },
+    { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 12 }, { wch: 16 }, { wch: 35 }
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Resultados Mapeados");
+  XLSX.writeFile(workbook, `Relatorio_YouTube_${queryTerm.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.xlsx`);
+  toast('Relatório Excel exportado!');
+}
+
+function exportToPowerPoint(videos, queryTerm) {
+  if (!videos || !videos.length) {
+    showErr('Nenhum vídeo disponível para exportar.');
+    return;
+  }
+
+  const pptx = new PptxGenJS();
+  pptx.layout = 'LAYOUT_16x9';
+
+  const slideCover = pptx.addSlide();
+  slideCover.background = { color: '0F172A' };
+
+  slideCover.addText("RELATÓRIO DE ANALÍTICA E CONTEÚDO", {
+    x: 0.8, y: 1.5, w: '85%', fontSize: 14, color: '38BDF8', bold: true
+  });
+
+  slideCover.addText(`Análise do Termo: "${queryTerm}"`, {
+    x: 0.8, y: 2.2, w: '85%', fontSize: 30, color: 'FFFFFF', bold: true
+  });
+
+  slideCover.addText(`Mapeamento automatizado de concorrência e engajamento no YouTube\nEmissão: ${new Date().toLocaleDateString('pt-BR')}`, {
+    x: 0.8, y: 3.5, w: '85%', fontSize: 13, color: '94A3B8'
+  });
+
+  const totalViews = videos.reduce((acc, v) => acc + (v.views || 0), 0);
+  const totalLikes = videos.reduce((acc, v) => acc + (v.likes || 0), 0);
+  const totalComments = videos.reduce((acc, v) => acc + (v.comments || 0), 0);
+  const avgViews = Math.round(totalViews / videos.length);
+
+  const slideSummary = pptx.addSlide();
+  slideSummary.addText("Visão Geral das Métricas", {
+    x: 0.6, y: 0.5, fontSize: 22, color: '0F172A', bold: true
+  });
+
+  slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 0.6, y: 1.3, w: 2.8, h: 1.8, fill: { color: 'F1F5F9' }, line: { color: 'CBD5E1' } });
+  slideSummary.addText("VÍDEOS ANALISADOS", { x: 0.8, y: 1.5, fontSize: 11, color: '64748B', bold: true });
+  slideSummary.addText(`${videos.length}`, { x: 0.8, y: 2.1, fontSize: 28, color: '0F172A', bold: true });
+
+  slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 3.7, y: 1.3, w: 2.8, h: 1.8, fill: { color: 'F1F5F9' }, line: { color: 'CBD5E1' } });
+  slideSummary.addText("TOTAL DE VIEWS", { x: 3.9, y: 1.5, fontSize: 11, color: '64748B', bold: true });
+  slideSummary.addText(`${fmtNum(totalViews)}`, { x: 3.9, y: 2.1, fontSize: 24, color: '0284C7', bold: true });
+
+  slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 6.8, y: 1.3, w: 2.8, h: 1.8, fill: { color: 'F1F5F9' }, line: { color: 'CBD5E1' } });
+  slideSummary.addText("MÉDIA DE VIEWS/VÍDEO", { x: 7.0, y: 1.5, fontSize: 11, color: '64748B', bold: true });
+  slideSummary.addText(`${fmtNum(avgViews)}`, { x: 7.0, y: 2.1, fontSize: 24, color: '16A34A', bold: true });
+
+  slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 9.9, y: 1.3, w: 2.8, h: 1.8, fill: { color: 'F1F5F9' }, line: { color: 'CBD5E1' } });
+  slideSummary.addText("INTERAÇÕES TOTAIS", { x: 10.1, y: 1.5, fontSize: 11, color: '64748B', bold: true });
+  slideSummary.addText(`${fmtNum(totalLikes + totalComments)}`, { x: 10.1, y: 2.1, fontSize: 24, color: 'E11D48', bold: true });
+
+  const topVideos = videos.slice(0, 10);
+  topVideos.forEach((v, index) => {
+    const slide = pptx.addSlide();
+
+    slide.addText(`#${index + 1} - ${v.title}`, {
+      x: 0.6, y: 0.4, w: 12.0, h: 0.8, fontSize: 16, color: '0F172A', bold: true
+    });
+
+    slide.addText(`Canal: ${v.channel} | Publicado em: ${fmtDate(v.publishedAt)}`, {
+      x: 0.6, y: 1.1, w: 12.0, fontSize: 12, color: '64748B'
+    });
+
+    if (v.thumbnail) {
+      slide.addImage({ path: v.thumbnail, x: 0.6, y: 1.7, w: 5.2, h: 2.9 });
+    }
+
+    const engRate = v.views > 0 ? (((v.likes + v.comments) / v.views) * 100).toFixed(2) : '0.00';
+
+    slide.addText([
+      { text: "Métricas Detalhadas:\n\n", options: { fontSize: 14, bold: true, color: '0F172A' } },
+      { text: "• Visualizações: ", options: { bold: true, color: '334155' } },
+      { text: `${v.views.toLocaleString('pt-BR')}\n`, options: { color: '0F172A' } },
+      { text: "• Curtidas: ", options: { bold: true, color: '334155' } },
+      { text: `${v.likes.toLocaleString('pt-BR')}\n`, options: { color: '0F172A' } },
+      { text: "• Comentários: ", options: { bold: true, color: '334155' } },
+      { text: `${v.comments.toLocaleString('pt-BR')}\n`, options: { color: '0F172A' } },
+      { text: "• Taxa de Engajamento: ", options: { bold: true, color: '334155' } },
+      { text: `${engRate}%\n\n`, options: { color: '2563EB', bold: true } },
+      { text: "Acessar Vídeo no YouTube", options: { hyperlink: { url: v.url }, color: 'E11D48', bold: true, underline: true } }
+    ], { x: 6.2, y: 1.7, w: 6.0, h: 3.0, fontSize: 13 });
+  });
+
+  pptx.writeFile({ fileName: `Apresentacao_YouTube_${queryTerm.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.pptx` });
+  toast('Apresentação PowerPoint exportada!');
+}
+
 async function doVideoSearch() {
   const q = (document.getElementById('videoQuery').value || '').trim();
   if (!q) { showErr('Informe um termo para buscar vídeos.'); return; }
@@ -308,6 +507,10 @@ async function doVideoSearch() {
       return true;
     }).slice(0, videoCount);
 
+    currentVideos = filtered;
+    currentQuery = q;
+
+    saveSearchToHistory({ q, regionCode: region, dateFilter: year, order: videoOrder, maxResults: videoCount }, filtered.length);
     renderVideos(filtered, q, year);
     toast(`${filtered.length} resultados mapeados.`);
   } catch(e) {
@@ -326,7 +529,22 @@ function renderVideos(videos, query, year) {
   }
   
   const lbl = videoOrder === 'date' ? 'Mais Recentes' : 'Mais Acessados';
-  let html = `<div class="mb-4 flex items-center justify-between"><h2 class="font-bold text-slate-800 text-lg">Resultados: ${lbl}</h2><span class="text-sm text-slate-500">${videos.length} mapeados</span></div>`;
+  let html = `
+    <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+      <div>
+        <h2 class="font-bold text-slate-800 text-lg">Resultados: ${lbl}</h2>
+        <span class="text-xs text-slate-500">${videos.length} mapeados para "${esc(query)}"</span>
+      </div>
+      <div class="flex items-center gap-2 flex-wrap">
+        <button onclick="exportToExcel(currentVideos, currentQuery)" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-sm">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg> Excel (.xlsx)
+        </button>
+        <button onclick="exportToPowerPoint(currentVideos, currentQuery)" class="bg-orange-600 hover:bg-orange-700 text-white font-medium px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-sm">
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg> Slide (.pptx)
+        </button>
+      </div>
+    </div>
+  `;
   
   html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">';
   html += videos.map(function(v, i) {
@@ -372,6 +590,7 @@ let currentPage = 1;
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('kwInput').addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); addKw(); }});
   document.getElementById('videoQuery').addEventListener('keydown', e => { if(e.key==='Enter') doVideoSearch(); });
+  renderHistoryUI();
 });
 
 function extractId(raw) {
@@ -508,77 +727,121 @@ function renderResults() {
   document.getElementById('resHeader').classList.add('flex');
   document.getElementById('badgeCount').textContent = `${displayed.length} validados no filtro`;
 
-  if (displayed.length === 0) {
-    area.innerHTML = '<div class="bg-white p-6 rounded-xl border border-slate-200 text-center text-slate-500">Nenhum comentário bate com as palavras-chave informadas.</div>';
+  if (!displayed.length) {
+    area.innerHTML = '<div class="h-64 flex flex-col items-center justify-center text-slate-400 text-center"><p class="text-sm">Nenhum comentário corresponde aos filtros aplicados.</p></div>';
     pag.innerHTML = ''; return;
   }
 
   const totalPages = Math.ceil(displayed.length / PAGE_SIZE);
   if (currentPage > totalPages) currentPage = totalPages;
-  const slice = displayed.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  const shVid = document.getElementById('chk_video').checked;
-  const shAut = document.getElementById('chk_author').checked;
-  const shDat = document.getElementById('chk_date').checked;
-  const shLik = document.getElementById('chk_likes').checked;
-  const shLnk = document.getElementById('chk_link').checked;
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const end = start + PAGE_SIZE;
+  const pageItems = displayed.slice(start, end);
 
-  area.innerHTML = slice.map(c => `
-    <div class="bg-white p-5 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow">
-      ${shVid ? `<div class="mb-3"><span class="inline-flex items-center gap-1.5 bg-slate-100 text-slate-700 border border-slate-200 text-xs font-semibold px-2 py-1 rounded truncate max-w-full"><svg class="w-3.5 h-3.5 text-brand-500 flex-shrink-0" viewBox="0 0 24 24"><path fill="currentColor" d="M23 7s-.3-2-1.2-2.8C20.7 3 19.4 3 18.8 2.9 16.2 2.8 12 2.8 12 2.8s-4.2 0-6.8.1C4.6 3 3.3 3 2.2 4.2 1.3 5 1 7 1 7S.7 9.3.7 11.5v2.1c0 2.2.3 4.4.3 4.4s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.3 22.2 12 22.2 12 22.2s4.2 0 6.8-.3c.6-.1 1.9-.1 3-1.3.9-.8 1.2-2.8 1.2-2.8s.3-2.2.3-4.4v-2.1C23.3 9.3 23 7 23 7zm-13.8 8.9V8.1l8.1 3.9-8.1 3.9z"/></svg> ${esc(c.videoTitle)}</span></div>` : ''}
-      
-      <div class="flex items-center gap-3 mb-2">
-        ${shAut ? `<div class="w-8 h-8 rounded-full bg-brand-100 text-brand-700 flex items-center justify-center text-xs font-bold flex-shrink-0">${initials(c.author)}</div><span class="font-semibold text-sm text-slate-900">${esc(c.author)}</span>` : ''}
-        ${shDat && c.date ? `<span class="ml-auto text-xs text-slate-400 font-medium">${fmtDate(c.date)}</span>` : ''}
+  const chkVideo = document.getElementById('chk_video').checked;
+  const chkAuthor = document.getElementById('chk_author').checked;
+  const chkDate = document.getElementById('chk_date').checked;
+  const chkLikes = document.getElementById('chk_likes').checked;
+  const chkLink = document.getElementById('chk_link').checked;
+
+  let html = pageItems.map(c => {
+    const textHl = highlight(c.text, keywords);
+    return `
+      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all space-y-3">
+        <div class="flex items-start justify-between gap-4">
+          <div class="flex items-center gap-2.5">
+            ${chkAuthor ? `<div class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-xs text-slate-600 uppercase">${initials(c.author)}</div><div><div class="font-semibold text-sm text-slate-800">${esc(c.author)}</div></div>` : ''}
+          </div>
+          <div class="flex items-center gap-3 text-xs text-slate-400">
+            ${chkDate ? `<span>${fmtDate(c.publishedAt)}</span>` : ''}
+            ${chkLikes ? `<span class="flex items-center gap-1 font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full"><svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="currentColor"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg>${c.likes}</span>` : ''}
+          </div>
+        </div>
+        <p class="text-sm text-slate-700 leading-relaxed break-words whitespace-pre-wrap">${textHl}</p>
+        ${chkVideo || chkLink ? `
+          <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
+            ${chkVideo ? `<span class="truncate font-medium text-slate-600" title="${esc(c.videoTitle)}">Vídeo: ${esc(c.videoTitle)}</span>` : '<span></span>'}
+            ${chkLink ? `<a href="https://www.youtube.com/watch?v=${c.videoId}&lc=${c.id}" target="_blank" class="text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1 flex-shrink-0">Ver no YouTube <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></a>` : ''}
+          </div>
+        ` : ''}
       </div>
-      
-      <div class="text-slate-700 text-[14px] leading-relaxed break-words whitespace-pre-wrap">${highlight(c.text, keywords)}</div>
-      
-      <div class="flex items-center gap-4 mt-4 pt-3 border-t border-slate-50">
-        ${shLik && c.likes !== undefined ? `<span class="flex items-center gap-1.5 text-xs text-slate-500 font-medium"><svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="currentColor"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg> ${c.likes} likes</span>` : ''}
-        ${shLnk && c.url ? `<a href="${esc(c.url)}" target="_blank" class="ml-auto text-xs font-semibold text-brand-600 hover:text-brand-800 flex items-center gap-1">Ver Origem <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></a>` : ''}
-      </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
-  if (totalPages > 1) {
-    let pagH = `<button ${currentPage===1?'disabled':''} class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-medium ${currentPage===1?'text-slate-300':'text-slate-600 hover:bg-slate-100'}" onclick="changePage(${currentPage-1})">Ant</button>`;
-    for (let i=1; i<=totalPages; i++) {
-      if (i===1 || i===totalPages || (i>=currentPage-1 && i<=currentPage+1)) {
-        pagH += `<button class="w-8 h-8 rounded-lg text-sm font-medium border ${i===currentPage ? 'bg-brand-500 text-white border-brand-500' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}" onclick="changePage(${i})">${i}</button>`;
-      } else if (i===currentPage-2 || i===currentPage+2) {
-        pagH += `<span class="text-slate-400 px-1">...</span>`;
-      }
-    }
-    pagH += `<button ${currentPage===totalPages?'disabled':''} class="px-3 py-1.5 rounded-lg border border-slate-200 text-sm font-medium ${currentPage===totalPages?'text-slate-300':'text-slate-600 hover:bg-slate-100'}" onclick="changePage(${currentPage+1})">Próx</button>`;
-    pag.innerHTML = pagH;
-  } else { pag.innerHTML = ''; }
+  area.innerHTML = html;
+  renderPagination(totalPages);
 }
 
-function changePage(p) { currentPage = p; renderResults(); document.getElementById('panelComments').scrollTo({ top: 0, behavior: 'smooth' }); }
+function renderPagination(totalPages) {
+  const pag = document.getElementById('pagArea');
+  if (totalPages <= 1) { pag.innerHTML = ''; return; }
+
+  let html = '';
+  for (let i = 1; i <= totalPages; i++) {
+    const active = (i === currentPage);
+    html += `<button onclick="goToPage(${i})" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${active ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}">${i}</button>`;
+  }
+  pag.innerHTML = html;
+}
+
+function goToPage(p) {
+  currentPage = p;
+  renderResults();
+  document.getElementById('panelComments').scrollTop = 0;
+}
+
+function doExport() {
+  if (!displayed.length) { showErr('Não há dados para exportar.'); return; }
+  const isXlsx = document.getElementById('exp_xlsx').checked;
+  const isCsv = document.getElementById('exp_csv').checked;
+
+  if (!isXlsx && !isCsv) { showErr('Selecione ao menos um formato para exportação.'); return; }
+
+  const rows = displayed.map(c => ({
+    "Vídeo ID": c.videoId,
+    "Título do Vídeo": c.videoTitle,
+    "Autor": c.author,
+    "Comentário": c.text,
+    "Curtidas": c.likes,
+    "Data": fmtDate(c.publishedAt),
+    "Link": `https://www.youtube.com/watch?v=${c.videoId}&lc=${c.id}`
+  }));
+
+  if (isXlsx) {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Comentários");
+    XLSX.writeFile(wb, `comentarios_youtube_${Date.now()}.xlsx`);
+  }
+
+  if (isCsv) {
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const csv = XLSX.utils.sheet_to_csv(ws);
+    const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = `comentarios_youtube_${Date.now()}.csv`;
+    link.click();
+  }
+}
 
 function clearAll() {
-  allResults = []; displayed = []; currentPage = 1;
+  allResults = [];
+  displayed = [];
+  videoTitles = {};
+  document.getElementById('videoInput').value = '';
+  document.getElementById('videoBadge').innerHTML = '';
+  document.getElementById('kwInput').value = '';
+  keywords = [];
+  renderTags();
+  document.getElementById('searchInline').value = '';
   document.getElementById('progCard').classList.add('hidden');
   document.getElementById('progList').innerHTML = '';
   document.getElementById('btnExport').classList.add('hidden');
   document.getElementById('btnClear').classList.add('hidden');
-  document.getElementById('searchInline').value = '';
-  renderResults(); toast('Memória de busca limpa.');
-}
-
-function doExport() {
-  if (!displayed.length) return toast('Sem dados no filtro.');
-  const eXlsx = document.getElementById('exp_xlsx').checked;
-  const eCsv = document.getElementById('exp_csv').checked;
-  
-  const rows = displayed.map(c => ({ 'Vídeo': c.videoTitle||'', 'ID do Vídeo': c.videoId||'', 'Autor': c.author||'', 'Comentário': c.text||'', 'Data': c.date?fmtDate(c.date):'', 'Curtidas': c.likes||0, 'Link': c.url||'' }));
-  const ws = XLSX.utils.json_to_sheet(rows);
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Extração');
-
-  if (eXlsx) XLSX.writeFile(wb, 'youtube_extracao.xlsx');
-  if (eCsv || (!eXlsx && !eCsv)) XLSX.writeFile(wb, 'youtube_extracao.csv', { bookType: 'csv' });
-  toast('Planilha exportada com sucesso!');
+  renderResults();
+  hideErr();
 }
 </script>
 </body>
