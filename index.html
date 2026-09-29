@@ -226,7 +226,7 @@
 </main>
 
 <script>
-// CONFIGURAÇÃO SEGURA DO SUPABASE
+// CONFIGURAÇÃO DO SUPABASE
 const SUPABASE_URL = "SUA_SUPABASE_URL_AQUI";
 const SUPABASE_ANON_KEY = "SUA_SUPABASE_ANON_KEY_AQUI";
 
@@ -672,89 +672,6 @@ function exportToExcel(videos, queryTerm) {
   toast('Relatório Excel exportado!');
 }
 
-function exportToPowerPoint(videos, queryTerm) {
-  if (!videos || !videos.length) return showErr('Nenhum vídeo disponível para exportar.');
-
-  const pptx = new PptxGenJS();
-  pptx.layout = 'LAYOUT_16x9';
-
-  const slideCover = pptx.addSlide();
-  slideCover.background = { color: '0F172A' };
-
-  slideCover.addText("RELATÓRIO DE ANALÍTICA E CONTEÚDO", {
-    x: 0.8, y: 1.5, w: '85%', fontSize: 14, color: '38BDF8', bold: true
-  });
-
-  slideCover.addText(`Análise do Termo: "${queryTerm}"`, {
-    x: 0.8, y: 2.2, w: '85%', fontSize: 30, color: 'FFFFFF', bold: true
-  });
-
-  slideCover.addText(`Mapeamento automatizado de concorrência e engajamento no YouTube\nEmissão: ${new Date().toLocaleDateString('pt-BR')}`, {
-    x: 0.8, y: 3.5, w: '85%', fontSize: 13, color: '94A3B8'
-  });
-
-  const totalViews = videos.reduce((acc, v) => acc + (v.views || 0), 0);
-  const totalLikes = videos.reduce((acc, v) => acc + (v.likes || 0), 0);
-  const totalComments = videos.reduce((acc, v) => acc + (v.comments || 0), 0);
-  const avgViews = Math.round(totalViews / videos.length);
-
-  const slideSummary = pptx.addSlide();
-  slideSummary.addText("Visão Geral das Métricas", {
-    x: 0.6, y: 0.5, fontSize: 22, color: '0F172A', bold: true
-  });
-
-  slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 0.6, y: 1.3, w: 2.8, h: 1.8, fill: { color: 'F1F5F9' }, line: { color: 'CBD5E1' } });
-  slideSummary.addText("VÍDEOS ANALISADOS", { x: 0.8, y: 1.5, fontSize: 11, color: '64748B', bold: true });
-  slideSummary.addText(`${videos.length}`, { x: 0.8, y: 2.1, fontSize: 28, color: '0F172A', bold: true });
-
-  slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 3.7, y: 1.3, w: 2.8, h: 1.8, fill: { color: 'F1F5F9' }, line: { color: 'CBD5E1' } });
-  slideSummary.addText("TOTAL DE VIEWS", { x: 3.9, y: 1.5, fontSize: 11, color: '64748B', bold: true });
-  slideSummary.addText(`${fmtNum(totalViews)}`, { x: 3.9, y: 2.1, fontSize: 24, color: '0284C7', bold: true });
-
-  slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 6.8, y: 1.3, w: 2.8, h: 1.8, fill: { color: 'F1F5F9' }, line: { color: 'CBD5E1' } });
-  slideSummary.addText("MÉDIA DE VIEWS/VÍDEO", { x: 7.0, y: 1.5, fontSize: 11, color: '64748B', bold: true });
-  slideSummary.addText(`${fmtNum(avgViews)}`, { x: 7.0, y: 2.1, fontSize: 24, color: '16A34A', bold: true });
-
-  slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 9.9, y: 1.3, w: 2.8, h: 1.8, fill: { color: 'F1F5F9' }, line: { color: 'CBD5E1' } });
-  slideSummary.addText("INTERAÇÕES TOTAIS", { x: 10.1, y: 1.5, fontSize: 11, color: '64748B', bold: true });
-  slideSummary.addText(`${fmtNum(totalLikes + totalComments)}`, { x: 10.1, y: 2.1, fontSize: 24, color: 'E11D48', bold: true });
-
-  const topVideos = videos.slice(0, 10);
-  topVideos.forEach((v, index) => {
-    const slide = pptx.addSlide();
-
-    slide.addText(`#${index + 1} - ${v.title}`, {
-      x: 0.6, y: 0.4, w: 12.0, h: 0.8, fontSize: 16, color: '0F172A', bold: true
-    });
-
-    slide.addText(`Canal: ${v.channel} | Publicado em: ${fmtDate(v.publishedAt)}`, {
-      x: 0.6, y: 1.1, w: 12.0, fontSize: 12, color: '64748B'
-    });
-
-    if (v.thumbnail) {
-      slide.addImage({ path: v.thumbnail, x: 0.6, y: 1.7, w: 5.2, h: 2.9 });
-    }
-
-    const engRate = v.views > 0 ? (((v.likes + v.comments) / v.views) * 100).toFixed(2) : '0.00';
-
-    slide.addText([
-      { text: "Métricas Detalhadas:\n\n", options: { fontSize: 14, bold: true, color: '0F172A' } },
-      { text: "• Visualizações: ", options: { bold: true, color: '334155' } },
-      { text: `${v.views.toLocaleString('pt-BR')}\n`, options: { color: '0F172A' } },
-      { text: "• Curtidas: ", options: { bold: true, color: '334155' } },
-      { text: `${v.likes.toLocaleString('pt-BR')}\n`, options: { color: '0F172A' } },
-      { text: "• Comentários: ", options: { bold: true, color: '334155' } },
-      { text: `${v.comments.toLocaleString('pt-BR')}\n`, options: { color: '0F172A' } },
-      { text: "• Taxa de Engajamento: ", options: { bold: true, color: '334155' } },
-      { text: `${engRate}%\n\n`, options: { color: '2563EB', bold: true } },
-      { text: "Acessar Vídeo no YouTube", options: { hyperlink: { url: v.url }, color: 'E11D48', bold: true, underline: true } }
-    ], { x: 6.2, y: 1.7, w: 6.0, h: 3.0, fontSize: 13 });
-  });
-
-  pptx.writeFile({ fileName: `Apresentacao_YouTube_${queryTerm.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.pptx` });
-  toast('Apresentação PowerPoint exportada!');
-}
-
 function exportCommentsToExcel(comments) {
   if (!comments || !comments.length) return showErr('Não há comentários para exportar.');
 
@@ -788,13 +705,7 @@ function exportCommentsToExcel(comments) {
 
   const worksheet = XLSX.utils.aoa_to_sheet(excelRows);
   worksheet['!cols'] = [
-    { wch: 6 },
-    { wch: 22 },
-    { wch: 70 },
-    { wch: 12 },
-    { wch: 16 },
-    { wch: 35 },
-    { wch: 40 }
+    { wch: 6 }, { wch: 22 }, { wch: 70 }, { wch: 12 }, { wch: 16 }, { wch: 35 }, { wch: 40 }
   ];
 
   const workbook = XLSX.utils.book_new();
@@ -803,96 +714,15 @@ function exportCommentsToExcel(comments) {
   toast('Relatório Excel exportado com sucesso!');
 }
 
-function exportCommentsToPowerPoint(comments) {
-  if (!comments || !comments.length) return showErr('Não há comentários para exportar.');
-
-  const pptx = new PptxGenJS();
-  pptx.layout = 'LAYOUT_16x9';
-
-  const slideCover = pptx.addSlide();
-  slideCover.background = { color: '0F172A' };
-
-  slideCover.addText("RELATÓRIO DE ANÁLISE DE COMENTÁRIOS", {
-    x: 0.8, y: 1.5, w: '85%', fontSize: 14, color: '38BDF8', bold: true
-  });
-
-  slideCover.addText("Auditoria de Opinião e Engajamento", {
-    x: 0.8, y: 2.2, w: '85%', fontSize: 32, color: 'FFFFFF', bold: true
-  });
-
-  slideCover.addText(`Total de Comentários Mapeados: ${comments.length}\nData de Emissão: ${new Date().toLocaleDateString('pt-BR')}`, {
-    x: 0.8, y: 3.6, w: '85%', fontSize: 13, color: '94A3B8'
-  });
-
-  const totalLikes = comments.reduce((acc, c) => acc + (c.likes || 0), 0);
-  const avgLikes = (totalLikes / comments.length).toFixed(1);
-  const topComment = [...comments].sort((a, b) => (b.likes || 0) - (a.likes || 0))[0];
-
-  const slideSummary = pptx.addSlide();
-  slideSummary.addText("Visão Geral do Engajamento", {
-    x: 0.6, y: 0.5, fontSize: 22, color: '0F172A', bold: true
-  });
-
-  slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 0.6, y: 1.3, w: 3.8, h: 1.8, fill: { color: 'F1F5F9' }, line: { color: 'CBD5E1' } });
-  slideSummary.addText("COMENTÁRIOS EXTRAÍDOS", { x: 0.8, y: 1.5, fontSize: 11, color: '64748B', bold: true });
-  slideSummary.addText(`${comments.length}`, { x: 0.8, y: 2.1, fontSize: 28, color: '0F172A', bold: true });
-
-  slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 4.7, y: 1.3, w: 3.8, h: 1.8, fill: { color: 'F1F5F9' }, line: { color: 'CBD5E1' } });
-  slideSummary.addText("TOTAL DE CURTIDAS", { x: 4.9, y: 1.5, fontSize: 11, color: '64748B', bold: true });
-  slideSummary.addText(`${fmtNum(totalLikes)}`, { x: 4.9, y: 2.1, fontSize: 28, color: '0284C7', bold: true });
-
-  slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 8.8, y: 1.3, w: 3.8, h: 1.8, fill: { color: 'F1F5F9' }, line: { color: 'CBD5E1' } });
-  slideSummary.addText("MÉDIA DE CURTIDAS", { x: 9.0, y: 1.5, fontSize: 11, color: '64748B', bold: true });
-  slideSummary.addText(`${avgLikes}`, { x: 9.0, y: 2.1, fontSize: 28, color: '16A34A', bold: true });
-
-  if (topComment) {
-    slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 0.6, y: 3.4, w: 12.0, h: 2.8, fill: { color: 'FEF2F2' }, line: { color: 'FCA5A5' } });
-    slideSummary.addText("🏆 COMENTÁRIO COM MAIOR IMPACTO", { x: 0.9, y: 3.6, fontSize: 12, color: 'B91C1C', bold: true });
-    slideSummary.addText(`Autor: ${topComment.author} • 👍 ${fmtNum(topComment.likes || 0)} curtidas`, { x: 0.9, y: 4.0, fontSize: 12, color: '450A0A', bold: true });
-    slideSummary.addText(`"${topComment.text.slice(0, 260)}${topComment.text.length > 260 ? '...' : ''}"`, { x: 0.9, y: 4.5, w: 11.4, fontSize: 13, color: '1F2937', italic: true });
-  }
-
-  const sortedComments = [...comments].sort((a, b) => (b.likes || 0) - (a.likes || 0)).slice(0, 10);
-  
-  for (let i = 0; i < sortedComments.length; i += 2) {
-    const slide = pptx.addSlide();
-    slide.addText(`Destaques de Opinião (#${i + 1} a #${Math.min(i + 2, sortedComments.length)})`, {
-      x: 0.6, y: 0.4, fontSize: 18, color: '0F172A', bold: true
-    });
-
-    const pageItems = sortedComments.slice(i, i + 2);
-    pageItems.forEach((c, idx) => {
-      const yPos = 1.2 + (idx * 2.8);
-      slide.addShape(pptx.shapes.RECTANGLE, { x: 0.6, y: yPos, w: 12.0, h: 2.5, fill: { color: 'F8FAFC' }, line: { color: 'E2E8F0' } });
-      slide.addText(`Autor: ${c.author}  |  👍 ${fmtNum(c.likes || 0)} curtidas  |  ${fmtDate(c.publishedAt)}`, {
-        x: 0.9, y: yPos + 0.2, fontSize: 11, color: '0284C7', bold: true
-      });
-      slide.addText(`"${c.text.slice(0, 280)}${c.text.length > 280 ? '...' : ''}"`, {
-        x: 0.9, y: yPos + 0.6, w: 11.4, h: 1.3, fontSize: 12, color: '334155'
-      });
-      if (c.videoTitle) {
-        slide.addText(`Vídeo: ${c.videoTitle}`, { x: 0.9, y: yPos + 2.0, fontSize: 10, color: '64748B' });
-      }
-    });
-  }
-
-  pptx.writeFile({ fileName: `Relatorio_Comentarios_${Date.now()}.pptx` });
-  toast('Apresentação em Slides exportada com sucesso!');
-}
-
 function doExport() {
   const isXlsx = document.getElementById('exp_xlsx').checked;
-  const isPptx = document.getElementById('exp_pptx').checked;
-
-  if (!isXlsx && !isPptx) return showErr('Selecione pelo menos um formato de exportação.');
+  if (!isXlsx) return showErr('Selecione pelo menos um formato de exportação.');
   hideErr();
 
   if (document.getElementById('panelVideos').style.display === 'block') {
     if (isXlsx) exportToExcel(currentVideos, currentQuery);
-    if (isPptx) exportToPowerPoint(currentVideos, currentQuery);
   } else {
     if (isXlsx) exportCommentsToExcel(allResults);
-    if (isPptx) exportCommentsToPowerPoint(allResults);
   }
 }
 
