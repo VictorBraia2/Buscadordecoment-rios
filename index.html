@@ -615,15 +615,15 @@ function renderVideos() {
   }
 
   container.innerHTML = `
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       ${currentVideos.map(v => `
-        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm flex flex-col justify-between">
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
           <div>
-            ${v.thumbnail ? `<img src="${v.thumbnail}" class="w-full h-40 object-cover" />` : ''}
+            ${v.thumbnail ? `<img src="${v.thumbnail}" class="w-full aspect-video object-cover" />` : ''}
             <div class="p-4 space-y-2">
               <h3 class="font-bold text-sm text-slate-800 line-clamp-2">${esc(v.title)}</h3>
-              <p class="text-xs text-slate-500">${esc(v.channel)} •${fmtDate(v.publishedAt)}</p>
-              <div class="flex gap-3 text-xs text-slate-600 pt-1">
+              <p class="text-xs text-slate-500 truncate">${esc(v.channel)} •${fmtDate(v.publishedAt)}</p>
+              <div class="flex gap-4 text-xs text-slate-600 pt-1">
                 <span>👁 ${fmtNum(v.views || 0)}</span>
                 <span>👍 ${fmtNum(v.likes || 0)}</span>
                 <span>💬 ${fmtNum(v.comments || 0)}</span>
