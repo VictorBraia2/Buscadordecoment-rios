@@ -136,12 +136,16 @@
       </button>
       
       <div id="cardExportOpts" class="pt-2">
-        <div class="flex gap-2 mb-2 justify-center text-sm">
-          <label class="flex items-center gap-1.5"><input type="checkbox" id="exp_xlsx" checked class="accent-brand-500 w-4 h-4"> Excel</label>
-          <label class="flex items-center gap-1.5"><input type="checkbox" id="exp_csv" class="accent-brand-500 w-4 h-4"> CSV</label>
+        <div class="flex gap-4 mb-2 justify-center text-sm">
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" id="exp_xlsx" checked class="accent-brand-500 w-4 h-4"> Excel (.xlsx)
+          </label>
+          <label class="flex items-center gap-1.5 cursor-pointer">
+            <input type="checkbox" id="exp_pptx" class="accent-brand-500 w-4 h-4"> Slide (.pptx)
+          </label>
         </div>
         <button id="btnExport" onclick="doExport()" class="hidden w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all shadow-sm text-sm">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Exportar Comentários
+          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Exportar Relatório
         </button>
       </div>
 
@@ -282,7 +286,6 @@ function sendToComments(url) {
   switchTab('comments');
   toast('Adicionado à fila de extração!');
 }
-
 
 async function saveSearchToHistory(params, totalResults) {
   try {
@@ -473,6 +476,159 @@ function exportToPowerPoint(videos, queryTerm) {
 
   pptx.writeFile({ fileName: `Apresentacao_YouTube_${queryTerm.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.pptx` });
   toast('Apresentação PowerPoint exportada!');
+}
+
+
+function exportCommentsToExcel(comments) {
+  if (!comments || !comments.length) {
+    showErr('Não há comentários para exportar.');
+    return;
+  }
+
+  const totalLikes = comments.reduce((acc, c) => acc + (c.likes || 0), 0);
+  const avgLikes = (totalLikes / comments.length).toFixed(1);
+
+  const excelRows = [
+    ["RELATÓRIO ANALÍTICO DE COMENTÁRIOS — YOUTUBE"],
+    [`Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`],
+    [],
+    ["MÉTRICAS GERAIS"],
+    ["Total de Comentários Mapeados", comments.length],
+    ["Total de Curtidas", totalLikes],
+    ["Média de Curtidas por Comentário", parseFloat(avgLikes)],
+    [],
+    ["DETALHAMENTO DOS COMENTÁRIOS"],
+    ["#", "Autor", "Comentário", "Curtidas", "Data de Publicação", "Vídeo de Origem", "Link do Vídeo"]
+  ];
+
+  comments.forEach((c, index) => {
+    excelRows.push([
+      index + 1,
+      c.author || 'Anônimo',
+      c.text || '',
+      c.likes || 0,
+      fmtDate(c.publishedAt),
+      c.videoTitle || 'N/A',
+      c.url || ''
+    ]);
+  });
+
+  const worksheet = XLSX.utils.aoa_to_sheet(excelRows);
+
+  worksheet['!cols'] = [
+    { wch: 6 },
+    { wch: 22 },
+    { wch: 70 },
+    { wch: 12 },
+    { wch: 16 },
+    { wch: 35 },
+    { wch: 40 }
+  ];
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Análise de Comentários");
+  XLSX.writeFile(workbook, `Relatorio_Comentarios_YouTube_${Date.now()}.xlsx`);
+  toast('Relatório Excel exportado com sucesso!');
+}
+
+function exportCommentsToPowerPoint(comments) {
+  if (!comments || !comments.length) {
+    showErr('Não há comentários para exportar.');
+    return;
+  }
+
+  const pptx = new PptxGenJS();
+  pptx.layout = 'LAYOUT_16x9';
+
+  const slideCover = pptx.addSlide();
+  slideCover.background = { color: '0F172A' };
+
+  slideCover.addText("RELATÓRIO DE ANÁLISE DE COMENTÁRIOS", {
+    x: 0.8, y: 1.5, w: '85%', fontSize: 14, color: '38BDF8', bold: true
+  });
+
+  slideCover.addText("Auditoria de Opinião e Engajamento", {
+    x: 0.8, y: 2.2, w: '85%', fontSize: 32, color: 'FFFFFF', bold: true
+  });
+
+  slideCover.addText(`Total de Comentários Mapeados: ${comments.length}\nData de Emissão: ${new Date().toLocaleDateString('pt-BR')}`, {
+    x: 0.8, y: 3.6, w: '85%', fontSize: 13, color: '94A3B8'
+  });
+
+  const totalLikes = comments.reduce((acc, c) => acc + (c.likes || 0), 0);
+  const avgLikes = (totalLikes / comments.length).toFixed(1);
+  const topComment = [...comments].sort((a, b) => (b.likes || 0) - (a.likes || 0))[0];
+
+  const slideSummary = pptx.addSlide();
+  slideSummary.addText("Visão Geral do Engajamento", {
+    x: 0.6, y: 0.5, fontSize: 22, color: '0F172A', bold: true
+  });
+
+  slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 0.6, y: 1.3, w: 3.8, h: 1.8, fill: { color: 'F1F5F9' }, line: { color: 'CBD5E1' } });
+  slideSummary.addText("COMENTÁRIOS EXTRAÍDOS", { x: 0.8, y: 1.5, fontSize: 11, color: '64748B', bold: true });
+  slideSummary.addText(`${comments.length}`, { x: 0.8, y: 2.1, fontSize: 28, color: '0F172A', bold: true });
+
+  slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 4.7, y: 1.3, w: 3.8, h: 1.8, fill: { color: 'F1F5F9' }, line: { color: 'CBD5E1' } });
+  slideSummary.addText("TOTAL DE CURTIDAS", { x: 4.9, y: 1.5, fontSize: 11, color: '64748B', bold: true });
+  slideSummary.addText(`${fmtNum(totalLikes)}`, { x: 4.9, y: 2.1, fontSize: 28, color: '0284C7', bold: true });
+
+  slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 8.8, y: 1.3, w: 3.8, h: 1.8, fill: { color: 'F1F5F9' }, line: { color: 'CBD5E1' } });
+  slideSummary.addText("MÉDIA DE CURTIDAS", { x: 9.0, y: 1.5, fontSize: 11, color: '64748B', bold: true });
+  slideSummary.addText(`${avgLikes}`, { x: 9.0, y: 2.1, fontSize: 28, color: '16A34A', bold: true });
+
+  if (topComment) {
+    slideSummary.addShape(pptx.shapes.RECTANGLE, { x: 0.6, y: 3.4, w: 12.0, h: 2.8, fill: { color: 'FEF2F2' }, line: { color: 'FCA5A5' } });
+    slideSummary.addText("🏆 COMENTÁRIO COM MAIOR IMPACTO", { x: 0.9, y: 3.6, fontSize: 12, color: 'B91C1C', bold: true });
+    slideSummary.addText(`Autor: ${topComment.author} • 👍 ${fmtNum(topComment.likes || 0)} curtidas`, { x: 0.9, y: 4.0, fontSize: 12, color: '450A0A', bold: true });
+    slideSummary.addText(`"${topComment.text.slice(0, 260)}${topComment.text.length > 260 ? '...' : ''}"`, { x: 0.9, y: 4.5, w: 11.4, fontSize: 13, color: '1F2937', italic: true });
+  }
+
+  const sortedComments = [...comments].sort((a, b) => (b.likes || 0) - (a.likes || 0)).slice(0, 10);
+  
+  for (let i = 0; i < sortedComments.length; i += 2) {
+    const slide = pptx.addSlide();
+    slide.addText(`Destaques de Opinião (#${i + 1} a #${Math.min(i + 2, sortedComments.length)})`, {
+      x: 0.6, y: 0.4, fontSize: 18, color: '0F172A', bold: true
+    });
+
+    const pageItems = sortedComments.slice(i, i + 2);
+    pageItems.forEach((c, idx) => {
+      const yPos = 1.2 + (idx * 2.8);
+      slide.addShape(pptx.shapes.RECTANGLE, { x: 0.6, y: yPos, w: 12.0, h: 2.5, fill: { color: 'F8FAFC' }, line: { color: 'E2E8F0' } });
+      slide.addText(`Autor: ${c.author}  |  👍 ${fmtNum(c.likes || 0)} curtidas  |  ${fmtDate(c.publishedAt)}`, {
+        x: 0.9, y: yPos + 0.2, fontSize: 11, color: '0284C7', bold: true
+      });
+      slide.addText(`"${c.text.slice(0, 280)}${c.text.length > 280 ? '...' : ''}"`, {
+        x: 0.9, y: yPos + 0.6, w: 11.4, h: 1.3, fontSize: 12, color: '334155'
+      });
+      if (c.videoTitle) {
+        slide.addText(`Vídeo: ${c.videoTitle}`, {
+          x: 0.9, y: yPos + 2.0, fontSize: 10, color: '64748B', italic: true
+        });
+      }
+    });
+  }
+
+  pptx.writeFile({ fileName: `Apresentacao_Comentarios_YouTube_${Date.now()}.pptx` });
+  toast('Apresentação PowerPoint exportada!');
+}
+
+function doExport() {
+  if (!filteredResults || !filteredResults.length) {
+    showErr('Não há comentários para exportar.');
+    return;
+  }
+
+  const expXlsx = document.getElementById('exp_xlsx').checked;
+  const expPptx = document.getElementById('exp_pptx').checked;
+
+  if (!expXlsx && !expPptx) {
+    showErr('Selecione ao menos um formato para exportação (Excel ou PowerPoint).');
+    return;
+  }
+
+  if (expXlsx) exportCommentsToExcel(filteredResults);
+  if (expPptx) exportCommentsToPowerPoint(filteredResults);
 }
 
 
@@ -787,50 +943,6 @@ function goToPage(p) {
   document.getElementById('panelComments').scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-function doExport() {
-  if (!filteredResults.length) {
-    showErr('Não há dados para exportar.');
-    return;
-  }
-
-  const expXlsx = document.getElementById('exp_xlsx').checked;
-  const expCsv = document.getElementById('exp_csv').checked;
-
-  if (!expXlsx && !expCsv) {
-    showErr('Selecione ao menos um formato para exportação (Excel ou CSV).');
-    return;
-  }
-
-  const dataToExport = filteredResults.map(c => ({
-    "Autor": c.author,
-    "Comentário": c.text,
-    "Curtidas": c.likes || 0,
-    "Data": fmtDate(c.publishedAt),
-    "Vídeo": c.videoTitle || '',
-    "Link": c.url || ''
-  }));
-
-  if (expXlsx) {
-    const ws = XLSX.utils.json_to_sheet(dataToExport);
-    ws['!cols'] = [{ wch: 20 }, { wch: 60 }, { wch: 10 }, { wch: 12 }, { wch: 30 }, { wch: 35 }];
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Comentários");
-    XLSX.writeFile(wb, `Comentarios_YouTube_${Date.now()}.xlsx`);
-  }
-
-  if (expCsv) {
-    const ws = XLSX.utils.json_to_sheet(dataToExport);
-    const csv = XLSX.utils.sheet_to_csv(ws);
-    const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(blob);
-    link.download = `Comentarios_YouTube_${Date.now()}.csv`;
-    link.click();
-  }
-
-  toast('Exportação concluída!');
-}
-
 function clearAll() {
   document.getElementById('videoInput').value = '';
   document.getElementById('videoBadge').innerHTML = '';
@@ -854,6 +966,7 @@ function clearAll() {
   document.getElementById('pagArea').innerHTML = '';
   toast('Sessão limpa.');
 }
+
 
 window.addEventListener('DOMContentLoaded', () => {
   renderHistoryUI();
