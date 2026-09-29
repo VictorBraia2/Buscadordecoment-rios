@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Buscador de Comentários & Vídeos — Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
@@ -33,6 +34,32 @@
       <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24"><path d="M23 7s-.3-2-1.2-2.8C20.7 3 19.4 3 18.8 2.9 16.2 2.8 12 2.8 12 2.8s-4.2 0-6.8.1C4.6 3 3.3 3 2.2 4.2 1.3 5 1 7 1 7S.7 9.3.7 11.5v2.1c0 2.2.3 4.4.3 4.4s.3 2 1.2 2.8c1.1 1.2 2.6 1.1 3.3 1.2C7.3 22.2 12 22.2 12 22.2s4.2 0 6.8-.3c.6-.1 1.9-.1 3-1.3.9-.8 1.2-2.8 1.2-2.8s.3-2.2.3-4.4v-2.1C23.3 9.3 23 7 23 7zm-13.8 8.9V8.1l8.1 3.9-8.1 3.9z"/></svg>
     </div>
     <h1 class="font-semibold text-[15px] tracking-tight">Análise YouTube</h1>
+  </div>
+
+  <!-- SEÇÃO DE AUTENTICAÇÃO SUPABASE -->
+  <div id="authSection" class="p-4 border-b border-slate-200 bg-slate-50">
+    <div id="loggedOutView">
+      <button onclick="loginWithGoogle()" class="w-full bg-white hover:bg-slate-100 text-slate-700 font-semibold py-2 px-3 border border-slate-300 rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all text-xs">
+        <svg class="w-4 h-4" viewBox="0 0 24 24">
+          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+        </svg>
+        Entrar com o Google
+      </button>
+    </div>
+
+    <div id="loggedInView" class="hidden flex items-center justify-between">
+      <div class="flex items-center gap-2.5 overflow-hidden">
+        <img id="userAvatar" class="w-8 h-8 rounded-full border border-slate-300 flex-shrink-0" src="" alt="Avatar" />
+        <div class="truncate">
+          <p id="userName" class="text-xs font-bold text-slate-800 truncate"></p>
+          <p id="userEmail" class="text-[10px] text-slate-500 truncate"></p>
+        </div>
+      </div>
+      <button onclick="logout()" class="text-xs text-red-500 hover:text-red-700 font-semibold ml-2 flex-shrink-0">Sair</button>
+    </div>
   </div>
 
   <div class="flex-1 overflow-y-auto p-5 space-y-6">
@@ -199,10 +226,54 @@
 </main>
 
 <script>
+// CONFIGURAÇÃO DO SUPABASE
+const SUPABASE_URL = "SUA_SUPABASE_URL_AQUI";
+const SUPABASE_ANON_KEY = "SUA_SUPABASE_ANON_KEY_AQUI";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
 let videoOrder = 'relevance';
 let videoCount = 20;
 let currentVideos = [];
 let currentQuery = '';
+let allResults = [];
+let keywords = [];
+
+// AUTENTICAÇÃO SUPABASE OAUTH
+async function loginWithGoogle() {
+  const { error } = await supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: window.location.origin }
+  });
+  if (error) showErr("Erro no login: " + error.message);
+}
+
+async function logout() {
+  await supabase.auth.signOut();
+  window.location.reload();
+}
+
+async function getAuthToken() {
+  const { data: { session } } = await supabase.auth.getSession();
+  return session ? session.access_token : null;
+}
+
+window.addEventListener('DOMContentLoaded', async () => {
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (user) {
+    document.getElementById('loggedOutView').classList.add('hidden');
+    document.getElementById('loggedInView').classList.remove('hidden');
+
+    document.getElementById('userName').textContent = user.user_metadata.full_name || 'Usuário';
+    document.getElementById('userEmail').textContent = user.email;
+    document.getElementById('userAvatar').src = user.user_metadata.avatar_url || 'https://via.placeholder.com/40';
+
+    renderHistoryUI();
+  } else {
+    document.getElementById('loggedOutView').classList.remove('hidden');
+    document.getElementById('loggedInView').classList.add('hidden');
+  }
+});
 
 function switchTab(tab) {
   const isC = (tab === 'comments');
@@ -276,6 +347,7 @@ function toast(msg) {
   clearTimeout(t._t); 
   t._t = setTimeout(() => t.classList.add('translate-y-24', 'opacity-0'), 3000);
 }
+
 function showErr(msg) { document.getElementById('errorMsg').textContent=msg; document.getElementById('errorBox').classList.remove('hidden'); document.getElementById('errorBox').classList.add('flex'); }
 function hideErr() { document.getElementById('errorBox').classList.add('hidden'); document.getElementById('errorBox').classList.remove('flex'); }
 
@@ -289,9 +361,15 @@ function sendToComments(url) {
 
 async function saveSearchToHistory(params, totalResults) {
   try {
+    const token = await getAuthToken();
+    if (!token) return;
+
     await fetch('/api/history', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
       body: JSON.stringify({
         query: params.q,
         region: params.regionCode || 'BR',
@@ -311,11 +389,19 @@ async function renderHistoryUI() {
   if (!container) return;
 
   try {
-    const res = await fetch('/api/history');
+    const token = await getAuthToken();
+    if (!token) {
+      container.innerHTML = '<p class="text-slate-400 p-1">Faça login para salvar o histórico.</p>';
+      return;
+    }
+
+    const res = await fetch('/api/history', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
     const history = await res.json();
 
     if (!Array.isArray(history) || !history.length) {
-      container.innerHTML = '<p class="text-slate-400 p-1">Nenhum histórico registrado no banco.</p>';
+      container.innerHTML = '<p class="text-slate-400 p-1">Nenhum histórico registrado.</p>';
       return;
     }
 
@@ -340,7 +426,13 @@ async function renderHistoryUI() {
 
 async function clearSearchHistory() {
   try {
-    await fetch('/api/history', { method: 'DELETE' });
+    const token = await getAuthToken();
+    if (!token) return;
+
+    await fetch('/api/history', { 
+      method: 'DELETE',
+      headers: { 'Authorization': `Bearer ${token}` }
+    });
     renderHistoryUI();
   } catch (e) {
     console.error("Erro ao limpar histórico:", e);
@@ -357,6 +449,183 @@ function loadSearchFromHistory(params) {
   doVideoSearch();
 }
 
+function onVideoInput() {
+  const val = document.getElementById('videoInput').value.trim();
+  const badge = document.getElementById('videoBadge');
+  if (!val) { badge.innerHTML = ''; return; }
+  const lines = val.split('\n').filter(l => l.trim().length > 0);
+  badge.innerHTML = `<span class="inline-block bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded font-medium">${lines.length} fonte(s) identificada(s)</span>`;
+}
+
+function addKw() {
+  const input = document.getElementById('kwInput');
+  const val = input.value.trim().toLowerCase();
+  if (!val || keywords.includes(val)) return;
+  keywords.push(val);
+  input.value = '';
+  renderTags();
+}
+
+function removeKw(kw) {
+  keywords = keywords.filter(k => k !== kw);
+  renderTags();
+}
+
+function renderTags() {
+  const area = document.getElementById('tagArea');
+  if (!keywords.length) {
+    area.innerHTML = '<span class="text-xs text-slate-400">Sem filtros (exibe todos)</span>';
+    return;
+  }
+  area.innerHTML = keywords.map(k => `
+    <span class="inline-flex items-center gap-1 bg-brand-50 text-brand-700 text-xs px-2 py-1 rounded-md border border-brand-100 font-medium">
+      ${esc(k)}
+      <button onclick="removeKw('${esc(k)}')" class="hover:text-brand-900 font-bold">&times;</button>
+    </span>
+  `).join('');
+}
+
+async function doSearch() {
+  const raw = document.getElementById('videoInput').value.trim();
+  if (!raw) return showErr('Informe ao menos uma URL ou ID do YouTube.');
+  hideErr();
+
+  const urls = raw.split('\n').map(s => s.trim()).filter(Boolean);
+  const progCard = document.getElementById('progCard');
+  const progList = document.getElementById('progList');
+  progCard.classList.remove('hidden');
+  progList.innerHTML = '';
+
+  allResults = [];
+
+  for (let i = 0; i < urls.length; i++) {
+    const url = urls[i];
+    const itemEl = document.createElement('div');
+    itemEl.className = 'flex items-center justify-between text-xs text-slate-600 bg-slate-50 p-2 rounded border border-slate-100';
+    itemEl.innerHTML = `<span class="truncate max-w-[200px]">${esc(url)}</span><span class="font-bold text-brand-600">Extraindo...</span>`;
+    progList.appendChild(itemEl);
+
+    try {
+      const token = await getAuthToken();
+      const res = await fetch('/api/comments', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ url, keywords })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Erro na requisição');
+
+      allResults.push(...(data.comments || []));
+      itemEl.querySelector('span:last-child').className = 'font-bold text-green-600';
+      itemEl.querySelector('span:last-child').textContent = `${data.comments?.length || 0} comentário(s)`;
+    } catch (err) {
+      itemEl.querySelector('span:last-child').className = 'font-bold text-red-500';
+      itemEl.querySelector('span:last-child').textContent = 'Erro';
+    }
+  }
+
+  renderComments();
+}
+
+function renderComments() {
+  const area = document.getElementById('resArea');
+  const resHeader = document.getElementById('resHeader');
+  const badge = document.getElementById('badgeCount');
+
+  if (!allResults.length) {
+    area.innerHTML = `<div class="p-8 text-center text-slate-400 text-sm">Nenhum comentário encontrado com os filtros selecionados.</div>`;
+    resHeader.classList.add('hidden');
+    return;
+  }
+
+  badge.textContent = `${allResults.length} comentário(s)`;
+  resHeader.classList.remove('hidden');
+  document.getElementById('btnExport').classList.remove('hidden');
+  document.getElementById('btnClear').classList.remove('hidden');
+
+  area.innerHTML = allResults.map(c => `
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
+      <div class="flex items-center justify-between text-xs text-slate-500">
+        <span class="font-bold text-slate-700">${esc(c.author || 'Anônimo')}</span>
+        <span>${fmtDate(c.publishedAt)}</span>
+      </div>
+      <p class="text-sm text-slate-800 whitespace-pre-line">${esc(c.text)}</p>
+      <div class="flex items-center justify-between pt-2 text-xs text-slate-400 border-t border-slate-50">
+        <span>👍 ${c.likes || 0}</span>
+        ${c.url ? `<a href="${c.url}" target="_blank" class="text-brand-600 hover:underline">Ver no YouTube</a>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function doVideoSearch() {
+  const q = document.getElementById('videoQuery').value.trim();
+  if (!q) return showErr('Digite um termo para pesquisar vídeos.');
+  hideErr();
+
+  const regionCode = document.getElementById('regionSelect').value;
+  const dateFilter = document.getElementById('dateSelect').value;
+
+  try {
+    const token = await getAuthToken();
+    const res = await fetch('/api/videos', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+      },
+      body: JSON.stringify({ q, regionCode, dateFilter, order: videoOrder, maxResults: videoCount })
+    });
+
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Erro ao buscar vídeos');
+
+    currentVideos = data.videos || [];
+    currentQuery = q;
+
+    saveSearchToHistory({ q, regionCode, dateFilter, order: videoOrder, maxResults: videoCount }, currentVideos.length);
+    renderVideos();
+  } catch (err) {
+    showErr(err.message);
+  }
+}
+
+function renderVideos() {
+  const container = document.getElementById('videoResArea');
+  if (!currentVideos.length) {
+    container.innerHTML = `<div class="p-8 text-center text-slate-400 text-sm">Nenhum vídeo retornado para esta busca.</div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      ${currentVideos.map(v => `
+        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm flex flex-col justify-between">
+          <div>
+            ${v.thumbnail ? `<img src="${v.thumbnail}" class="w-full h-40 object-cover" />` : ''}
+            <div class="p-4 space-y-2">
+              <h3 class="font-bold text-sm text-slate-800 line-clamp-2">${esc(v.title)}</h3>
+              <p class="text-xs text-slate-500">${esc(v.channel)} •${fmtDate(v.publishedAt)}</p>
+              <div class="flex gap-3 text-xs text-slate-600 pt-1">
+                <span>👁 ${fmtNum(v.views || 0)}</span>
+                <span>👍 ${fmtNum(v.likes || 0)}</span>
+                <span>💬 ${fmtNum(v.comments || 0)}</span>
+              </div>
+            </div>
+          </div>
+          <div class="p-4 pt-0">
+            <button onclick="sendToComments('${v.url}')" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs transition-colors">
+              Extrair Comentários Deste Vídeo
+            </button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
 
 function exportToExcel(videos, queryTerm) {
   if (!videos || !videos.length) {
@@ -477,7 +746,6 @@ function exportToPowerPoint(videos, queryTerm) {
   pptx.writeFile({ fileName: `Apresentacao_YouTube_${queryTerm.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.pptx` });
   toast('Apresentação PowerPoint exportada!');
 }
-
 
 function exportCommentsToExcel(comments) {
   if (!comments || !comments.length) {
@@ -602,375 +870,65 @@ function exportCommentsToPowerPoint(comments) {
         x: 0.9, y: yPos + 0.6, w: 11.4, h: 1.3, fontSize: 12, color: '334155'
       });
       if (c.videoTitle) {
-        slide.addText(`Vídeo: ${c.videoTitle}`, {
-          x: 0.9, y: yPos + 2.0, fontSize: 10, color: '64748B', italic: true
-        });
+        slide.addText(`Vídeo: ${c.videoTitle}`, { x: 0.9, y: yPos + 2.0, fontSize: 10, color: '64748B' });
       }
     });
   }
 
-  pptx.writeFile({ fileName: `Apresentacao_Comentarios_YouTube_${Date.now()}.pptx` });
-  toast('Apresentação PowerPoint exportada!');
+  pptx.writeFile({ fileName: `Relatorio_Comentarios_${Date.now()}.pptx` });
+  toast('Apresentação em Slides exportada com sucesso!');
 }
 
 function doExport() {
-  if (!filteredResults || !filteredResults.length) {
-    showErr('Não há comentários para exportar.');
+  const isXlsx = document.getElementById('exp_xlsx').checked;
+  const isPptx = document.getElementById('exp_pptx').checked;
+
+  if (!isXlsx && !isPptx) {
+    showErr('Selecione pelo menos um formato de exportação (.xlsx ou .pptx).');
     return;
   }
 
-  const expXlsx = document.getElementById('exp_xlsx').checked;
-  const expPptx = document.getElementById('exp_pptx').checked;
-
-  if (!expXlsx && !expPptx) {
-    showErr('Selecione ao menos um formato para exportação (Excel ou PowerPoint).');
-    return;
-  }
-
-  if (expXlsx) exportCommentsToExcel(filteredResults);
-  if (expPptx) exportCommentsToPowerPoint(filteredResults);
-}
-
-
-async function doVideoSearch() {
-  const q = (document.getElementById('videoQuery').value || '').trim();
-  if (!q) { showErr('Informe um termo para buscar vídeos.'); return; }
   hideErr();
 
-  const region = document.getElementById('regionSelect').value;
-  const year = document.getElementById('dateSelect').value;
-  const area = document.getElementById('videoResArea');
-  const btn = document.getElementById('btnVideoSearch');
-  
-  btn.disabled = true;
-  area.innerHTML = '<div class="h-64 flex flex-col items-center justify-center text-slate-500"><svg class="w-8 h-8 animate-spin text-brand-500 mb-3" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Buscando na API...</div>';
-
-  try {
-    let fetchLimit = videoCount * 3;
-    let url = `/api/search?q=${encodeURIComponent(q)}&order=${videoOrder}&maxResults=${fetchLimit}`;
-    if (region && region !== 'ALL') url += '&regionCode=' + encodeURIComponent(region);
-    if (year && year !== 'ALL') {
-      const publishedAfter = `${year}-01-01T00:00:00Z`;
-      const publishedBefore = `${parseInt(year) + 1}-01-01T00:00:00Z`;
-      url += `&publishedAfter=${encodeURIComponent(publishedAfter)}&publishedBefore=${encodeURIComponent(publishedBefore)}`;
-    }
-
-    const res = await fetch(url);
-    const data = await res.json();
-    if (data.error) throw new Error(data.error);
-
-    let raw = data.videos || [];
-    let filtered = raw.filter(v => {
-      const urlLower = (v.url || '').toLowerCase();
-      const titleLower = (v.title || '').toLowerCase();
-      if (urlLower.includes('/shorts/')) return false;
-      if (titleLower.includes('#shorts') || titleLower.includes('#short')) return false;
-      if (v.duration && v.duration <= 60) return false;
-      return true;
-    }).slice(0, videoCount);
-
-    currentVideos = filtered;
-    currentQuery = q;
-
-    await saveSearchToHistory({ q, regionCode: region, dateFilter: year, order: videoOrder, maxResults: videoCount }, filtered.length);
-    renderVideos(filtered, q, year);
-    toast(`${filtered.length} resultados mapeados.`);
-  } catch(e) {
-    showErr(e.message);
-    area.innerHTML = '<div class="h-64 flex items-center justify-center text-red-500 font-medium">Erro na busca. Verifique a API.</div>';
-  } finally {
-    btn.disabled = false;
-  }
-}
-
-function renderVideos(videos, query, year) {
-  const area = document.getElementById('videoResArea');
-  if (!videos.length) {
-    area.innerHTML = `<div class="h-64 flex items-center justify-center text-slate-500">Nenhum vídeo longo encontrado para "${esc(query)}".</div>`;
-    return;
-  }
-  
-  const lbl = videoOrder === 'date' ? 'Mais Recentes' : 'Mais Acessados';
-  let html = `
-    <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-      <div>
-        <h2 class="font-bold text-slate-800 text-lg">Resultados: ${lbl}</h2>
-        <span class="text-xs text-slate-500">${videos.length} mapeados para "${esc(query)}"</span>
-      </div>
-      <div class="flex items-center gap-2 flex-wrap">
-        <button onclick="exportToExcel(currentVideos, currentQuery)" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-sm">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg> Excel (.xlsx)
-        </button>
-        <button onclick="exportToPowerPoint(currentVideos, currentQuery)" class="bg-orange-600 hover:bg-orange-700 text-white font-medium px-3 py-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-colors shadow-sm">
-          <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/></svg> Slide (.pptx)
-        </button>
-      </div>
-    </div>
-  `;
-  
-  html += '<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">';
-  html += videos.map(function(v, i) {
-    const views = v.views || 0;
-    const interactions = (v.likes || 0) + (v.comments || 0);
-    const eng = views > 0 ? ((interactions / views) * 100).toFixed(2) : 0;
-    const badgeColor = eng >= 2.5 ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : (eng >= 1 ? 'bg-amber-100 text-amber-800 border-amber-200' : 'bg-slate-100 text-slate-600 border-slate-200');
-
-    return `
-      <div class="bg-white rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all overflow-hidden flex flex-col group">
-        <div class="relative aspect-video bg-slate-900 overflow-hidden">
-          <img src="${esc(v.thumbnail)}" class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
-          <span class="absolute top-2 left-2 bg-black/70 text-white text-xs font-bold px-2.5 py-1 rounded-md backdrop-blur-sm">#${i+1}</span>
-          <span class="absolute top-2 right-2 ${badgeColor} border text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-md shadow-sm">Eng: ${eng}%</span>
-        </div>
-        <div class="p-4 flex flex-col flex-1 gap-2">
-          <div class="font-semibold text-sm text-slate-900 leading-tight line-clamp-2" title="${esc(v.title)}">${esc(v.title)}</div>
-          <p class="text-xs text-slate-500 font-medium">${esc(v.channel)} • ${fmtDate(v.publishedAt)}</p>
-          
-          <div class="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 font-medium">
-            <span title="Visualizações">👁 ${fmtNum(views)}</span>
-            <span title="Curtidas">👍 ${fmtNum(v.likes || 0)}</span>
-            <span title="Comentários">💬 ${fmtNum(v.comments || 0)}</span>
-          </div>
-
-          <div class="mt-3 flex gap-2">
-            <a href="${esc(v.url)}" target="_blank" rel="noopener noreferrer" class="flex-1 text-center bg-slate-100 hover:bg-slate-200 text-slate-700 py-1.5 rounded-lg text-xs font-semibold transition-colors">
-              Assistir
-            </a>
-            <button onclick="sendToComments('${esc(v.url)}')" class="flex-1 bg-brand-50 hover:bg-brand-100 text-brand-700 py-1.5 rounded-lg text-xs font-semibold transition-colors">
-              Extrair Comentários
-            </button>
-          </div>
-        </div>
-      </div>
-    `;
-  }).join('');
-  
-  html += '</div>';
-  area.innerHTML = html;
-}
-
-
-let keywords = [];
-let allResults = [];
-let filteredResults = [];
-let currentPage = 1;
-const PAGE_SIZE = 20;
-
-function onVideoInput() {
-  const text = document.getElementById('videoInput').value.trim();
-  const badge = document.getElementById('videoBadge');
-  if (!text) {
-    badge.innerHTML = '';
-    return;
-  }
-  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-  badge.innerHTML = `<span class="inline-block bg-slate-100 text-slate-700 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-slate-200">${lines.length} fonte(s) detectada(s)</span>`;
-}
-
-function addKw() {
-  const input = document.getElementById('kwInput');
-  const val = input.value.trim().toLowerCase();
-  if (val && !keywords.includes(val)) {
-    keywords.push(val);
-    input.value = '';
-    renderTags();
-    if (allResults.length > 0) applyInline();
-  }
-}
-
-function removeKw(kw) {
-  keywords = keywords.filter(k => k !== kw);
-  renderTags();
-  if (allResults.length > 0) applyInline();
-}
-
-function renderTags() {
-  const area = document.getElementById('tagArea');
-  if (!keywords.length) {
-    area.innerHTML = '<span class="text-xs text-slate-400">Sem filtros (exibe todos)</span>';
-    return;
-  }
-  area.innerHTML = keywords.map(k => `
-    <span class="inline-flex items-center gap-1 bg-brand-50 text-brand-700 border border-brand-200 text-xs font-medium px-2 py-0.5 rounded-md">
-      ${esc(k)}
-      <button onclick="removeKw('${esc(k)}')" class="hover:text-brand-900 font-bold ml-0.5">&times;</button>
-    </span>
-  `).join('');
-}
-
-document.getElementById('kwInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    addKw();
-  }
-});
-
-async function doSearch() {
-  const rawInput = document.getElementById('videoInput').value.trim();
-  if (!rawInput) {
-    showErr('Insira ao menos um link ou ID de vídeo do YouTube.');
-    return;
-  }
-  hideErr();
-
-  const lines = rawInput.split('\n').map(l => l.trim()).filter(Boolean);
-  const btn = document.getElementById('btnSearch');
-  const progCard = document.getElementById('progCard');
-  const progList = document.getElementById('progList');
-  const resArea = document.getElementById('resArea');
-
-  btn.disabled = true;
-  progCard.classList.remove('hidden');
-  progList.innerHTML = '';
-  resArea.innerHTML = '';
-  allResults = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const item = lines[i];
-    const itemEl = document.createElement('div');
-    itemEl.className = 'text-xs text-slate-600 flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-100';
-    itemEl.innerHTML = `<span>Processando: <strong class="text-slate-800">${esc(item)}</strong></span> <span class="animate-pulse text-brand-600 font-semibold">Extraindo...</span>`;
-    progList.appendChild(itemEl);
-
-    try {
-      const res = await fetch(`/api/comments?url=${encodeURIComponent(item)}`);
-      const data = await res.json();
-
-      if (data.error) throw new Error(data.error);
-
-      const comments = data.comments || [];
-      allResults.push(...comments);
-
-      itemEl.querySelector('span:last-child').className = 'text-emerald-600 font-semibold';
-      itemEl.querySelector('span:last-child').textContent = `✓ ${comments.length} comentários`;
-    } catch (err) {
-      itemEl.querySelector('span:last-child').className = 'text-red-600 font-semibold';
-      itemEl.querySelector('span:last-child').textContent = `✕ Erro: ${err.message}`;
-    }
-  }
-
-  btn.disabled = false;
-  
-  if (allResults.length > 0) {
-    document.getElementById('btnExport').classList.remove('hidden');
-    document.getElementById('btnClear').classList.remove('hidden');
-    document.getElementById('resHeader').classList.remove('hidden');
-    applyInline();
-    toast(`${allResults.length} comentários extraídos no total!`);
+  if (document.getElementById('panelVideos').style.display === 'block') {
+    if (isXlsx) exportToExcel(currentVideos, currentQuery);
+    if (isPptx) exportToPowerPoint(currentVideos, currentQuery);
   } else {
-    resArea.innerHTML = '<div class="h-64 flex items-center justify-center text-slate-500">Nenhum comentário retornado.</div>';
+    if (isXlsx) exportCommentsToExcel(allResults);
+    if (isPptx) exportCommentsToPowerPoint(allResults);
   }
-}
-
-function applyInline() {
-  const query = (document.getElementById('searchInline').value || '').toLowerCase().trim();
-
-  filteredResults = allResults.filter(item => {
-    const textMatch = !query || item.text.toLowerCase().includes(query);
-    const kwMatch = !keywords.length || keywords.some(k => item.text.toLowerCase().includes(k));
-    return textMatch && kwMatch;
-  });
-
-  currentPage = 1;
-  document.getElementById('badgeCount').textContent = `${filteredResults.length} de ${allResults.length} comentários`;
-  renderCommentsPage();
-}
-
-function renderCommentsPage() {
-  const area = document.getElementById('resArea');
-  const pag = document.getElementById('pagArea');
-
-  if (!filteredResults.length) {
-    area.innerHTML = '<div class="h-48 flex items-center justify-center text-slate-400">Nenhum comentário corresponde aos filtros aplicados.</div>';
-    pag.innerHTML = '';
-    return;
-  }
-
-  const chkVideo = document.getElementById('chk_video').checked;
-  const chkAuthor = document.getElementById('chk_author').checked;
-  const chkDate = document.getElementById('chk_date').checked;
-  const chkLikes = document.getElementById('chk_likes').checked;
-  const chkLink = document.getElementById('chk_link').checked;
-
-  const totalPages = Math.ceil(filteredResults.length / PAGE_SIZE);
-  const start = (currentPage - 1) * PAGE_SIZE;
-  const pageItems = filteredResults.slice(start, start + PAGE_SIZE);
-
-  area.innerHTML = pageItems.map(c => `
-    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:border-slate-300 transition-all">
-      <div class="flex items-start justify-between gap-3 mb-2">
-        <div class="flex items-center gap-2">
-          ${chkAuthor ? `
-            <div class="w-7 h-7 bg-slate-200 text-slate-700 font-bold rounded-full flex items-center justify-center text-xs">
-              ${initials(c.author)}
-            </div>
-            <span class="text-xs font-semibold text-slate-800">${esc(c.author)}</span>
-          ` : ''}
-          ${chkVideo && c.videoTitle ? `<span class="text-xs text-slate-400">• em <strong class="text-slate-600">${esc(c.videoTitle)}</strong></span>` : ''}
-        </div>
-        <div class="flex items-center gap-3 text-xs text-slate-400">
-          ${chkLikes ? `<span title="Curtidas">👍 ${fmtNum(c.likes || 0)}</span>` : ''}
-          ${chkDate ? `<span>${fmtDate(c.publishedAt)}</span>` : ''}
-          ${chkLink && c.url ? `<a href="${esc(c.url)}" target="_blank" class="text-brand-600 hover:underline font-medium">Link</a>` : ''}
-        </div>
-      </div>
-      <p class="text-sm text-slate-700 leading-relaxed whitespace-pre-line">${esc(c.text)}</p>
-    </div>
-  `).join('');
-
-  if (totalPages > 1) {
-    let pButtons = '';
-    for (let i = 1; i <= totalPages; i++) {
-      if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
-        pButtons += `
-          <button onclick="goToPage(${i})" class="px-3 py-1 text-xs font-semibold rounded-lg border ${i === currentPage ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'} transition-colors">
-            ${i}
-          </button>
-        `;
-      } else if (i === currentPage - 3 || i === currentPage + 3) {
-        pButtons += `<span class="px-1 text-xs text-slate-400">...</span>`;
-      }
-    }
-    pag.innerHTML = pButtons;
-  } else {
-    pag.innerHTML = '';
-  }
-}
-
-function goToPage(p) {
-  currentPage = p;
-  renderCommentsPage();
-  document.getElementById('panelComments').scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function clearAll() {
-  document.getElementById('videoInput').value = '';
-  document.getElementById('videoBadge').innerHTML = '';
-  document.getElementById('searchInline').value = '';
-  keywords = [];
   allResults = [];
-  filteredResults = [];
-  renderTags();
-  
-  document.getElementById('progCard').classList.add('hidden');
+  document.getElementById('videoInput').value = '';
   document.getElementById('resHeader').classList.add('hidden');
   document.getElementById('btnExport').classList.add('hidden');
   document.getElementById('btnClear').classList.add('hidden');
-  
   document.getElementById('resArea').innerHTML = `
     <div class="h-64 flex flex-col items-center justify-center text-slate-400 text-center">
       <svg class="w-12 h-12 mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
       <p class="text-sm">Preencha as URLs na barra lateral e clique em <strong class="text-slate-600">Extrair</strong></p>
-    </div>
-  `;
-  document.getElementById('pagArea').innerHTML = '';
-  toast('Sessão limpa.');
+    </div>`;
+  toast('Sessão limpa!');
 }
 
-
-window.addEventListener('DOMContentLoaded', () => {
-  renderHistoryUI();
-});
+function applyInline() {
+  const term = document.getElementById('searchInline').value.toLowerCase();
+  if (!term) return renderComments();
+  const filtered = allResults.filter(c => c.text && c.text.toLowerCase().includes(term));
+  
+  const area = document.getElementById('resArea');
+  area.innerHTML = filtered.map(c => `
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
+      <div class="flex items-center justify-between text-xs text-slate-500">
+        <span class="font-bold text-slate-700">${esc(c.author || 'Anônimo')}</span>
+        <span>${fmtDate(c.publishedAt)}</span>
+      </div>
+      <p class="text-sm text-slate-800 whitespace-pre-line">${esc(c.text)}</p>
+    </div>
+  `).join('');
+}
 </script>
 </body>
 </html>
