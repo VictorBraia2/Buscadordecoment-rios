@@ -200,8 +200,6 @@ let videoCount = 20;
 let currentVideos = [];
 let currentQuery = '';
 
-const HISTORY_KEY = 'yt_analyzer_search_history';
-
 function switchTab(tab) {
   const isC = (tab === 'comments');
   
@@ -285,59 +283,65 @@ function sendToComments(url) {
   toast('Adicionado à fila de extração!');
 }
 
-function saveSearchToHistory(params, totalResults) {
-  const history = getSearchHistory();
-  const newEntry = {
-    id: Date.now(),
-    timestamp: new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-    query: params.q,
-    region: params.regionCode || 'BR',
-    year: params.dateFilter || 'ALL',
-    totalResults: totalResults,
-    params: params
-  };
 
-  const filtered = history.filter(item => 
-    !(item.query.toLowerCase() === params.q.toLowerCase() && item.region === params.regionCode && item.year === params.dateFilter)
-  );
-
-  const updatedHistory = [newEntry, ...filtered].slice(0, 20);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(updatedHistory));
-  renderHistoryUI();
-}
-
-function getSearchHistory() {
+async function saveSearchToHistory(params, totalResults) {
   try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY)) || [];
+    await fetch('/api/history', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        query: params.q,
+        region: params.regionCode || 'BR',
+        year: params.dateFilter || 'ALL',
+        order: params.order || 'relevance',
+        totalResults: totalResults
+      })
+    });
+    renderHistoryUI();
   } catch (e) {
-    return [];
+    console.error("Erro ao salvar histórico:", e);
   }
 }
 
-function clearSearchHistory() {
-  localStorage.removeItem(HISTORY_KEY);
-  renderHistoryUI();
-}
-
-function renderHistoryUI() {
+async function renderHistoryUI() {
   const container = document.getElementById('historyListContainer');
   if (!container) return;
 
-  const history = getSearchHistory();
-  if (!history.length) {
-    container.innerHTML = '<p class="text-slate-400 p-1">Nenhum histórico registrado.</p>';
-    return;
-  }
+  try {
+    const res = await fetch('/api/history');
+    const history = await res.json();
 
-  container.innerHTML = history.map(item => `
-    <div class="p-2 hover:bg-slate-100 rounded-lg border border-slate-100 transition-colors cursor-pointer flex justify-between items-center group" onclick='loadSearchFromHistory(${JSON.stringify(item.params)})'>
-      <div class="truncate pr-2">
-        <div class="font-semibold text-slate-800 truncate">${esc(item.query)}</div>
-        <div class="text-[10px] text-slate-400">${item.region} • ${item.year} • ${item.totalResults} vids</div>
+    if (!Array.isArray(history) || !history.length) {
+      container.innerHTML = '<p class="text-slate-400 p-1">Nenhum histórico registrado no banco.</p>';
+      return;
+    }
+
+    container.innerHTML = history.map(item => `
+      <div class="p-2 hover:bg-slate-100 rounded-lg border border-slate-100 transition-colors cursor-pointer flex justify-between items-center group" onclick='loadSearchFromHistory(${JSON.stringify({
+        q: item.query,
+        regionCode: item.region,
+        dateFilter: item.year,
+        order: item.order_by
+      })})'>
+        <div class="truncate pr-2">
+          <div class="font-semibold text-slate-800 truncate">${esc(item.query)}</div>
+          <div class="text-[10px] text-slate-400">${item.region} • ${item.year} • ${item.total_results} vids</div>
+        </div>
+        <span class="text-[10px] text-slate-400 flex-shrink-0">${new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
       </div>
-      <span class="text-[10px] text-slate-400 flex-shrink-0">${item.timestamp}</span>
-    </div>
-  `).join('');
+    `).join('');
+  } catch (e) {
+    container.innerHTML = '<p class="text-red-400 p-1">Erro ao carregar histórico.</p>';
+  }
+}
+
+async function clearSearchHistory() {
+  try {
+    await fetch('/api/history', { method: 'DELETE' });
+    renderHistoryUI();
+  } catch (e) {
+    console.error("Erro ao limpar histórico:", e);
+  }
 }
 
 function loadSearchFromHistory(params) {
@@ -349,6 +353,7 @@ function loadSearchFromHistory(params) {
   if (params.maxResults) setCount(params.maxResults);
   doVideoSearch();
 }
+
 
 function exportToExcel(videos, queryTerm) {
   if (!videos || !videos.length) {
@@ -470,6 +475,7 @@ function exportToPowerPoint(videos, queryTerm) {
   toast('Apresentação PowerPoint exportada!');
 }
 
+
 async function doVideoSearch() {
   const q = (document.getElementById('videoQuery').value || '').trim();
   if (!q) { showErr('Informe um termo para buscar vídeos.'); return; }
@@ -510,7 +516,7 @@ async function doVideoSearch() {
     currentVideos = filtered;
     currentQuery = q;
 
-    saveSearchToHistory({ q, regionCode: region, dateFilter: year, order: videoOrder, maxResults: videoCount }, filtered.length);
+    await saveSearchToHistory({ q, regionCode: region, dateFilter: year, order: videoOrder, maxResults: videoCount }, filtered.length);
     renderVideos(filtered, q, year);
     toast(`${filtered.length} resultados mapeados.`);
   } catch(e) {
@@ -562,182 +568,167 @@ function renderVideos(videos, query, year) {
         </div>
         <div class="p-4 flex flex-col flex-1 gap-2">
           <div class="font-semibold text-sm text-slate-900 leading-tight line-clamp-2" title="${esc(v.title)}">${esc(v.title)}</div>
-          <div class="text-xs text-slate-500 font-medium">${esc(v.channel)}</div>
-          <div class="flex items-center gap-4 text-xs text-slate-600 mt-auto pt-3 border-t border-slate-100">
-            <span class="flex items-center gap-1 font-medium" title="Visualizações"><svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg> ${fmtNum(v.views)}</span>
-            <span class="flex items-center gap-1 font-medium" title="Curtidas"><svg class="w-4 h-4 text-slate-400" viewBox="0 0 24 24" fill="currentColor"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg> ${fmtNum(v.likes)}</span>
-            <span class="flex items-center gap-1 font-medium" title="Comentários"><svg class="w-4 h-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg> ${fmtNum(v.comments)}</span>
+          <p class="text-xs text-slate-500 font-medium">${esc(v.channel)} • ${fmtDate(v.publishedAt)}</p>
+          
+          <div class="mt-auto pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600 font-medium">
+            <span title="Visualizações">👁 ${fmtNum(views)}</span>
+            <span title="Curtidas">👍 ${fmtNum(v.likes || 0)}</span>
+            <span title="Comentários">💬 ${fmtNum(v.comments || 0)}</span>
           </div>
-          <div class="flex gap-2 mt-3">
-            <button class="flex-1 bg-brand-50 hover:bg-brand-100 text-brand-700 border border-brand-200 text-xs font-semibold py-2 rounded-lg transition-colors flex justify-center items-center gap-1.5" onclick="sendToComments('${esc(v.url)}')">Extrair Alvo</button>
-            <a href="${esc(v.url)}" target="_blank" class="w-10 flex items-center justify-center bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-500 rounded-lg transition-colors" title="Assistir"><svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg></a>
+
+          <div class="mt-3 flex gap-2">
+            <a href="${esc(v.url)}" target="_blank" rel="noopener noreferrer" class="flex-1 text-center bg-slate-100 hover:bg-slate-200 text-slate-700 py-1.5 rounded-lg text-xs font-semibold transition-colors">
+              Assistir
+            </a>
+            <button onclick="sendToComments('${esc(v.url)}')" class="flex-1 bg-brand-50 hover:bg-brand-100 text-brand-700 py-1.5 rounded-lg text-xs font-semibold transition-colors">
+              Extrair Comentários
+            </button>
           </div>
         </div>
       </div>
     `;
   }).join('');
+  
   html += '</div>';
   area.innerHTML = html;
 }
 
-const PAGE_SIZE = 25;
+
 let keywords = [];
 let allResults = [];
-let displayed = [];
-let videoTitles = {};
+let filteredResults = [];
 let currentPage = 1;
+const PAGE_SIZE = 20;
 
-window.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('kwInput').addEventListener('keydown', e => { if(e.key==='Enter') { e.preventDefault(); addKw(); }});
-  document.getElementById('videoQuery').addEventListener('keydown', e => { if(e.key==='Enter') doVideoSearch(); });
-  renderHistoryUI();
-});
-
-function extractId(raw) {
-  raw = (raw||'').trim();
-  const ps = [/[?&]v=([\w-]{11})/,/youtu\.be\/([\w-]{11})/,/\/shorts\/([\w-]{11})/,/\/embed\/([\w-]{11})/,/^([\w-]{11})$/];
-  for (const p of ps) { const m = raw.match(p); if (m) return m[1]; }
-  return null;
-}
-function parseVideos(txt) {
-  const seen = new Set(); const out = [];
-  for (const line of txt.split(/[\n,]+/).map(s=>s.trim()).filter(Boolean)) {
-    const id = extractId(line);
-    if (id && !seen.has(id)) { seen.add(id); out.push({raw:line,id}); }
-    else if (!id) out.push({raw:line,id:null});
-  }
-  return out;
-}
 function onVideoInput() {
-  const v = document.getElementById('videoInput').value;
-  const bd = document.getElementById('videoBadge');
-  if (!v.trim()) { bd.innerHTML=''; return; }
-  const p = parseVideos(v);
-  const ok = p.filter(x=>x.id).length;
-  bd.innerHTML = `<span class="inline-block mt-1 bg-brand-50 text-brand-700 border border-brand-200 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider">${ok} válidos detectados</span>`;
+  const text = document.getElementById('videoInput').value.trim();
+  const badge = document.getElementById('videoBadge');
+  if (!text) {
+    badge.innerHTML = '';
+    return;
+  }
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  badge.innerHTML = `<span class="inline-block bg-slate-100 text-slate-700 text-[11px] font-semibold px-2 py-0.5 rounded-full border border-slate-200">${lines.length} fonte(s) detectada(s)</span>`;
 }
 
 function addKw() {
-  const inp = document.getElementById('kwInput');
-  const val = inp.value.trim().toLowerCase();
-  if (!val || keywords.includes(val)) { inp.value=''; return; }
-  keywords.push(val); inp.value=''; renderTags(); applyInline();
+  const input = document.getElementById('kwInput');
+  const val = input.value.trim().toLowerCase();
+  if (val && !keywords.includes(val)) {
+    keywords.push(val);
+    input.value = '';
+    renderTags();
+    if (allResults.length > 0) applyInline();
+  }
 }
-function removeKw(i) { keywords.splice(i,1); renderTags(); applyInline(); }
+
+function removeKw(kw) {
+  keywords = keywords.filter(k => k !== kw);
+  renderTags();
+  if (allResults.length > 0) applyInline();
+}
+
 function renderTags() {
   const area = document.getElementById('tagArea');
-  if (!keywords.length) { area.innerHTML='<span class="text-xs text-slate-400">Sem filtros (exibe todos)</span>'; return; }
-  area.innerHTML = keywords.map((k,i)=>`<div class="inline-flex items-center gap-1.5 bg-brand-50 text-brand-700 border border-brand-200 rounded-md px-2 py-1 text-xs font-semibold">${esc(k)}<button onclick="removeKw(${i})" class="text-brand-400 hover:text-brand-700 leading-none">×</button></div>`).join('');
+  if (!keywords.length) {
+    area.innerHTML = '<span class="text-xs text-slate-400">Sem filtros (exibe todos)</span>';
+    return;
+  }
+  area.innerHTML = keywords.map(k => `
+    <span class="inline-flex items-center gap-1 bg-brand-50 text-brand-700 border border-brand-200 text-xs font-medium px-2 py-0.5 rounded-md">
+      ${esc(k)}
+      <button onclick="removeKw('${esc(k)}')" class="hover:text-brand-900 font-bold ml-0.5">&times;</button>
+    </span>
+  `).join('');
 }
 
-function highlight(text, kws) {
-  if (!kws.length) return esc(text);
-  const safe = esc(text);
-  const re = new RegExp(`(${kws.map(k=>k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')).join('|')})`, 'gi');
-  return safe.replace(re,'<mark class="bg-yellow-200 text-yellow-900 px-1 rounded-sm">$1</mark>');
-}
-
-async function fetchTitle(id) {
-  try { const res = await fetch(`/api/title?videoId=${encodeURIComponent(id)}`); const d = await res.json(); return d.error ? id : d.title || id; } 
-  catch { return id; }
-}
-async function fetchComments(videoId, onProg) {
-  const list = []; let token = ''; let page = 0;
-  do {
-    let url = `/api/comments?videoId=${encodeURIComponent(videoId)}`;
-    if (token) url += `&pageToken=${encodeURIComponent(token)}`;
-    const res = await fetch(url); const data = await res.json();
-    if (data.error) throw new Error(data.error);
-    if (data.comments) list.push(...data.comments);
-    token = data.nextPageToken || ''; page++;
-    if (onProg) onProg(page, list.length);
-    if (page >= 10) break;
-  } while (token);
-  return list;
-}
+document.getElementById('kwInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    addKw();
+  }
+});
 
 async function doSearch() {
-  const txt = document.getElementById('videoInput').value;
-  const parsed = parseVideos(txt).filter(x => x.id);
-  if (!parsed.length) { showErr('Insira ao menos um link válido.'); return; }
+  const rawInput = document.getElementById('videoInput').value.trim();
+  if (!rawInput) {
+    showErr('Insira ao menos um link ou ID de vídeo do YouTube.');
+    return;
+  }
   hideErr();
 
-  document.getElementById('btnSearch').disabled = true;
-  const pCard = document.getElementById('progCard');
-  const pList = document.getElementById('progList');
-  pCard.classList.remove('hidden'); pList.innerHTML = '';
-  allResults = []; videoTitles = {};
+  const lines = rawInput.split('\n').map(l => l.trim()).filter(Boolean);
+  const btn = document.getElementById('btnSearch');
+  const progCard = document.getElementById('progCard');
+  const progList = document.getElementById('progList');
+  const resArea = document.getElementById('resArea');
 
-  for (let i = 0; i < parsed.length; i++) {
-    const item = parsed[i]; const divId = 'prog_' + i;
-    pList.insertAdjacentHTML('beforeend', `<div id="${divId}" class="flex items-center gap-3 text-sm p-2 rounded-lg bg-slate-50 border border-slate-100"><svg class="w-4 h-4 animate-spin text-brand-500 flex-shrink-0" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-slate-600 truncate">Processando alvo: ${item.id}</span></div>`);
-    
+  btn.disabled = true;
+  progCard.classList.remove('hidden');
+  progList.innerHTML = '';
+  resArea.innerHTML = '';
+  allResults = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const item = lines[i];
+    const itemEl = document.createElement('div');
+    itemEl.className = 'text-xs text-slate-600 flex items-center justify-between bg-slate-50 p-2 rounded border border-slate-100';
+    itemEl.innerHTML = `<span>Processando: <strong class="text-slate-800">${esc(item)}</strong></span> <span class="animate-pulse text-brand-600 font-semibold">Extraindo...</span>`;
+    progList.appendChild(itemEl);
+
     try {
-      const title = await fetchTitle(item.id); videoTitles[item.id] = title;
-      const comments = await fetchComments(item.id, (pg, count) => {
-        const el = document.getElementById(divId); if(el) el.querySelector('span').textContent = `[${count} extraídos] ${title}`;
-      });
-      comments.forEach(c => { c.videoId = item.id; c.videoTitle = title; });
+      const res = await fetch(`/api/comments?url=${encodeURIComponent(item)}`);
+      const data = await res.json();
+
+      if (data.error) throw new Error(data.error);
+
+      const comments = data.comments || [];
       allResults.push(...comments);
-      
-      const el = document.getElementById(divId);
-      el.className = 'flex items-center gap-3 text-sm p-2 rounded-lg bg-emerald-50 border border-emerald-100 text-emerald-800 font-medium';
-      el.innerHTML = `<svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg><span class="truncate">${comments.length} encontrados em: ${title}</span>`;
-    } catch (e) {
-      const el = document.getElementById(divId);
-      el.className = 'flex items-center gap-3 text-sm p-2 rounded-lg bg-red-50 border border-red-100 text-red-800 font-medium';
-      el.innerHTML = `<svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg><span class="truncate">Erro: ${e.message}</span>`;
+
+      itemEl.querySelector('span:last-child').className = 'text-emerald-600 font-semibold';
+      itemEl.querySelector('span:last-child').textContent = `✓ ${comments.length} comentários`;
+    } catch (err) {
+      itemEl.querySelector('span:last-child').className = 'text-red-600 font-semibold';
+      itemEl.querySelector('span:last-child').textContent = `✕ Erro: ${err.message}`;
     }
   }
 
-  document.getElementById('btnSearch').disabled = false;
-  applyInline();
+  btn.disabled = false;
+  
   if (allResults.length > 0) {
     document.getElementById('btnExport').classList.remove('hidden');
     document.getElementById('btnClear').classList.remove('hidden');
-    toast(`Extração concluída: ${allResults.length} comentários na base.`);
+    document.getElementById('resHeader').classList.remove('hidden');
+    applyInline();
+    toast(`${allResults.length} comentários extraídos no total!`);
+  } else {
+    resArea.innerHTML = '<div class="h-64 flex items-center justify-center text-slate-500">Nenhum comentário retornado.</div>';
   }
 }
 
 function applyInline() {
   const query = (document.getElementById('searchInline').value || '').toLowerCase().trim();
-  displayed = allResults.filter(c => {
-    if (keywords.length > 0) {
-      if (!keywords.some(k => c.text.toLowerCase().includes(k))) return false;
-    }
-    if (query) {
-      if (!(c.text.toLowerCase().includes(query) || c.author.toLowerCase().includes(query) || c.videoTitle.toLowerCase().includes(query))) return false;
-    }
-    return true;
+
+  filteredResults = allResults.filter(item => {
+    const textMatch = !query || item.text.toLowerCase().includes(query);
+    const kwMatch = !keywords.length || keywords.some(k => item.text.toLowerCase().includes(k));
+    return textMatch && kwMatch;
   });
-  currentPage = 1; renderResults();
+
+  currentPage = 1;
+  document.getElementById('badgeCount').textContent = `${filteredResults.length} de ${allResults.length} comentários`;
+  renderCommentsPage();
 }
 
-function renderResults() {
+function renderCommentsPage() {
   const area = document.getElementById('resArea');
   const pag = document.getElementById('pagArea');
-  
-  if (allResults.length === 0) {
-    document.getElementById('resHeader').classList.add('hidden');
-    area.innerHTML = '<div class="h-64 flex flex-col items-center justify-center text-slate-400 text-center"><svg class="w-12 h-12 mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg><p class="text-sm">Preencha as URLs na barra lateral e clique em <strong class="text-slate-600">Extrair</strong></p></div>';
-    pag.innerHTML = ''; return;
+
+  if (!filteredResults.length) {
+    area.innerHTML = '<div class="h-48 flex items-center justify-center text-slate-400">Nenhum comentário corresponde aos filtros aplicados.</div>';
+    pag.innerHTML = '';
+    return;
   }
-  
-  document.getElementById('resHeader').classList.remove('hidden');
-  document.getElementById('resHeader').classList.add('flex');
-  document.getElementById('badgeCount').textContent = `${displayed.length} validados no filtro`;
-
-  if (!displayed.length) {
-    area.innerHTML = '<div class="h-64 flex flex-col items-center justify-center text-slate-400 text-center"><p class="text-sm">Nenhum comentário corresponde aos filtros aplicados.</p></div>';
-    pag.innerHTML = ''; return;
-  }
-
-  const totalPages = Math.ceil(displayed.length / PAGE_SIZE);
-  if (currentPage > totalPages) currentPage = totalPages;
-
-  const start = (currentPage - 1) * PAGE_SIZE;
-  const end = start + PAGE_SIZE;
-  const pageItems = displayed.slice(start, end);
 
   const chkVideo = document.getElementById('chk_video').checked;
   const chkAuthor = document.getElementById('chk_author').checked;
@@ -745,104 +736,128 @@ function renderResults() {
   const chkLikes = document.getElementById('chk_likes').checked;
   const chkLink = document.getElementById('chk_link').checked;
 
-  let html = pageItems.map(c => {
-    const textHl = highlight(c.text, keywords);
-    return `
-      <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:shadow-md transition-all space-y-3">
-        <div class="flex items-start justify-between gap-4">
-          <div class="flex items-center gap-2.5">
-            ${chkAuthor ? `<div class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center font-bold text-xs text-slate-600 uppercase">${initials(c.author)}</div><div><div class="font-semibold text-sm text-slate-800">${esc(c.author)}</div></div>` : ''}
-          </div>
-          <div class="flex items-center gap-3 text-xs text-slate-400">
-            ${chkDate ? `<span>${fmtDate(c.publishedAt)}</span>` : ''}
-            ${chkLikes ? `<span class="flex items-center gap-1 font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full"><svg class="w-3.5 h-3.5 text-slate-400" viewBox="0 0 24 24" fill="currentColor"><path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z"/></svg>${c.likes}</span>` : ''}
-          </div>
+  const totalPages = Math.ceil(filteredResults.length / PAGE_SIZE);
+  const start = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = filteredResults.slice(start, start + PAGE_SIZE);
+
+  area.innerHTML = pageItems.map(c => `
+    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm hover:border-slate-300 transition-all">
+      <div class="flex items-start justify-between gap-3 mb-2">
+        <div class="flex items-center gap-2">
+          ${chkAuthor ? `
+            <div class="w-7 h-7 bg-slate-200 text-slate-700 font-bold rounded-full flex items-center justify-center text-xs">
+              ${initials(c.author)}
+            </div>
+            <span class="text-xs font-semibold text-slate-800">${esc(c.author)}</span>
+          ` : ''}
+          ${chkVideo && c.videoTitle ? `<span class="text-xs text-slate-400">• em <strong class="text-slate-600">${esc(c.videoTitle)}</strong></span>` : ''}
         </div>
-        <p class="text-sm text-slate-700 leading-relaxed break-words whitespace-pre-wrap">${textHl}</p>
-        ${chkVideo || chkLink ? `
-          <div class="pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
-            ${chkVideo ? `<span class="truncate font-medium text-slate-600" title="${esc(c.videoTitle)}">Vídeo: ${esc(c.videoTitle)}</span>` : '<span></span>'}
-            ${chkLink ? `<a href="https://www.youtube.com/watch?v=${c.videoId}&lc=${c.id}" target="_blank" class="text-brand-600 hover:text-brand-700 font-semibold flex items-center gap-1 flex-shrink-0">Ver no YouTube <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg></a>` : ''}
-          </div>
-        ` : ''}
+        <div class="flex items-center gap-3 text-xs text-slate-400">
+          ${chkLikes ? `<span title="Curtidas">👍 ${fmtNum(c.likes || 0)}</span>` : ''}
+          ${chkDate ? `<span>${fmtDate(c.publishedAt)}</span>` : ''}
+          ${chkLink && c.url ? `<a href="${esc(c.url)}" target="_blank" class="text-brand-600 hover:underline font-medium">Link</a>` : ''}
+        </div>
       </div>
-    `;
-  }).join('');
+      <p class="text-sm text-slate-700 leading-relaxed whitespace-pre-line">${esc(c.text)}</p>
+    </div>
+  `).join('');
 
-  area.innerHTML = html;
-  renderPagination(totalPages);
-}
-
-function renderPagination(totalPages) {
-  const pag = document.getElementById('pagArea');
-  if (totalPages <= 1) { pag.innerHTML = ''; return; }
-
-  let html = '';
-  for (let i = 1; i <= totalPages; i++) {
-    const active = (i === currentPage);
-    html += `<button onclick="goToPage(${i})" class="px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${active ? 'bg-brand-600 text-white' : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'}">${i}</button>`;
+  if (totalPages > 1) {
+    let pButtons = '';
+    for (let i = 1; i <= totalPages; i++) {
+      if (i === 1 || i === totalPages || (i >= currentPage - 2 && i <= currentPage + 2)) {
+        pButtons += `
+          <button onclick="goToPage(${i})" class="px-3 py-1 text-xs font-semibold rounded-lg border ${i === currentPage ? 'bg-brand-600 text-white border-brand-600' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'} transition-colors">
+            ${i}
+          </button>
+        `;
+      } else if (i === currentPage - 3 || i === currentPage + 3) {
+        pButtons += `<span class="px-1 text-xs text-slate-400">...</span>`;
+      }
+    }
+    pag.innerHTML = pButtons;
+  } else {
+    pag.innerHTML = '';
   }
-  pag.innerHTML = html;
 }
 
 function goToPage(p) {
   currentPage = p;
-  renderResults();
-  document.getElementById('panelComments').scrollTop = 0;
+  renderCommentsPage();
+  document.getElementById('panelComments').scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function doExport() {
-  if (!displayed.length) { showErr('Não há dados para exportar.'); return; }
-  const isXlsx = document.getElementById('exp_xlsx').checked;
-  const isCsv = document.getElementById('exp_csv').checked;
+  if (!filteredResults.length) {
+    showErr('Não há dados para exportar.');
+    return;
+  }
 
-  if (!isXlsx && !isCsv) { showErr('Selecione ao menos um formato para exportação.'); return; }
+  const expXlsx = document.getElementById('exp_xlsx').checked;
+  const expCsv = document.getElementById('exp_csv').checked;
 
-  const rows = displayed.map(c => ({
-    "Vídeo ID": c.videoId,
-    "Título do Vídeo": c.videoTitle,
+  if (!expXlsx && !expCsv) {
+    showErr('Selecione ao menos um formato para exportação (Excel ou CSV).');
+    return;
+  }
+
+  const dataToExport = filteredResults.map(c => ({
     "Autor": c.author,
     "Comentário": c.text,
-    "Curtidas": c.likes,
+    "Curtidas": c.likes || 0,
     "Data": fmtDate(c.publishedAt),
-    "Link": `https://www.youtube.com/watch?v=${c.videoId}&lc=${c.id}`
+    "Vídeo": c.videoTitle || '',
+    "Link": c.url || ''
   }));
 
-  if (isXlsx) {
-    const ws = XLSX.utils.json_to_sheet(rows);
+  if (expXlsx) {
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
+    ws['!cols'] = [{ wch: 20 }, { wch: 60 }, { wch: 10 }, { wch: 12 }, { wch: 30 }, { wch: 35 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Comentários");
-    XLSX.writeFile(wb, `comentarios_youtube_${Date.now()}.xlsx`);
+    XLSX.writeFile(wb, `Comentarios_YouTube_${Date.now()}.xlsx`);
   }
 
-  if (isCsv) {
-    const ws = XLSX.utils.json_to_sheet(rows);
+  if (expCsv) {
+    const ws = XLSX.utils.json_to_sheet(dataToExport);
     const csv = XLSX.utils.sheet_to_csv(ws);
     const blob = new Blob(["\ufeff" + csv], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement("a");
+    const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `comentarios_youtube_${Date.now()}.csv`;
+    link.download = `Comentarios_YouTube_${Date.now()}.csv`;
     link.click();
   }
+
+  toast('Exportação concluída!');
 }
 
 function clearAll() {
-  allResults = [];
-  displayed = [];
-  videoTitles = {};
   document.getElementById('videoInput').value = '';
   document.getElementById('videoBadge').innerHTML = '';
-  document.getElementById('kwInput').value = '';
-  keywords = [];
-  renderTags();
   document.getElementById('searchInline').value = '';
+  keywords = [];
+  allResults = [];
+  filteredResults = [];
+  renderTags();
+  
   document.getElementById('progCard').classList.add('hidden');
-  document.getElementById('progList').innerHTML = '';
+  document.getElementById('resHeader').classList.add('hidden');
   document.getElementById('btnExport').classList.add('hidden');
   document.getElementById('btnClear').classList.add('hidden');
-  renderResults();
-  hideErr();
+  
+  document.getElementById('resArea').innerHTML = `
+    <div class="h-64 flex flex-col items-center justify-center text-slate-400 text-center">
+      <svg class="w-12 h-12 mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+      <p class="text-sm">Preencha as URLs na barra lateral e clique em <strong class="text-slate-600">Extrair</strong></p>
+    </div>
+  `;
+  document.getElementById('pagArea').innerHTML = '';
+  toast('Sessão limpa.');
 }
+
+window.addEventListener('DOMContentLoaded', () => {
+  renderHistoryUI();
+});
 </script>
 </body>
 </html>
