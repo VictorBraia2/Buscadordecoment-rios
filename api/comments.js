@@ -7,8 +7,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ error: `Método ${req.method} não permitido` });
   }
-
-  // Captura do corpo da requisição (POST) com fallback para query string
+  
   const { url, keywords } = req.body || req.query || {};
   const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
@@ -65,7 +64,6 @@ export default async function handler(req, res) {
       };
     });
 
-    // Filtrar por palavras-chave se o utilizador as definiu
     if (Array.isArray(keywords) && keywords.length > 0) {
       comments = comments.filter(c => {
         const textLower = (c.text || '').toLowerCase();
