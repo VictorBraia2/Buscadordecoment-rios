@@ -1,8 +1,9 @@
-window.tailwind = window.tailwind || {};
-window.tailwind.config = {
+tailwind.config = {
   theme: {
     extend: {
-      fontFamily: { sans: ['Inter', 'sans-serif'] },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif']
+      },
       colors: {
         brand: {
           50: '#fef2f2',
