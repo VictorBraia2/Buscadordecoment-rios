@@ -1,0 +1,12 @@
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+html, body { min-height: 100%; }
+button:disabled { user-select: none; }
+
+#loggedOutView button:focus-visible,
+#loggedInView button:focus-visible,
+#btnExport:focus-visible,
+#btnClear:focus-visible { outline: 2px solid #ef4444; outline-offset: 2px; }
