@@ -226,9 +226,9 @@
 </main>
 
 <script>
-// CONFIGURAÇÃO DO SUPABASE (Variável única e segura)
-const SUPABASE_URL = "SUA_SUPABASE_URL_AQUI";
-const SUPABASE_ANON_KEY = "SUA_SUPABASE_ANON_KEY_AQUI";
+// CONFIGURAÇÃO DO SUPABASE (Credenciais Reais)
+const SUPABASE_URL = "https://swumxtcnknwuyramygwf.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_Y2qmuYPREDMqdfcvO_JU2w_8jHtGHmF";
 
 let sbClient = null;
 if (window.supabase && typeof window.supabase.createClient === 'function' && SUPABASE_URL.startsWith("https://")) {
@@ -248,7 +248,7 @@ let keywords = [];
 
 // AUTENTICAÇÃO
 async function loginWithGoogle() {
-  if (!sbClient) return alert("Por favor, preencha as variáveis SUPABASE_URL e SUPABASE_ANON_KEY válidas no código.");
+  if (!sbClient) return alert("Por favor, verifique a inicialização do Supabase.");
   const { error } = await sbClient.auth.signInWithOAuth({
     provider: 'google',
     options: { redirectTo: window.location.origin }
