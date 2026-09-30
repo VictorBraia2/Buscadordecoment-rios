@@ -5,26 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Buscador de Comentários & Vídeos — Dashboard</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pptxgenjs@4.0.1/dist/pptxgen.bundle.js"></script>
+<script src="/assets/js/tailwind.config.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script>
-  tailwind.config = {
-    theme: {
-      extend: {
-        fontFamily: { sans: ['Inter', 'sans-serif'] },
-        colors: { brand: { 50: '#fef2f2', 100: '#fee2e2', 500: '#ef4444', 600: '#dc2626', 700: '#b91c1c' } }
-      }
-    }
-  }
-</script>
-<style>
-  ::-webkit-scrollbar { width: 8px; height: 8px; }
-  ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-  ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-</style>
+<link rel="stylesheet" href="/assets/css/styles.css">
 </head>
 <body class="bg-slate-50 text-slate-900 h-screen flex flex-col md:flex-row overflow-hidden antialiased">
 
@@ -39,14 +25,14 @@
   <!-- SEÇÃO DE AUTENTICAÇÃO SUPABASE -->
   <div id="authSection" class="p-4 border-b border-slate-200 bg-slate-50">
     <div id="loggedOutView">
-      <button type="button" onclick="loginWithGoogle()" class="w-full bg-white hover:bg-slate-100 text-slate-700 font-semibold py-2 px-3 border border-slate-300 rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all text-xs cursor-pointer">
+      <button type="button" id="btnGoogleLogin" class="w-full bg-white hover:bg-slate-100 text-slate-700 font-semibold py-2 px-3 border border-slate-300 rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all text-xs cursor-pointer">
         <svg class="w-4 h-4" viewBox="0 0 24 24">
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
           <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
           <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
           <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
         </svg>
-        Entrar com o Google
+        Continuar com o Google
       </button>
     </div>
 
@@ -58,14 +44,14 @@
           <p id="userEmail" class="text-[10px] text-slate-500 truncate"></p>
         </div>
       </div>
-      <button type="button" onclick="logout()" class="text-xs text-red-500 hover:text-red-700 font-semibold ml-2 flex-shrink-0 cursor-pointer">Sair</button>
+      <button type="button" id="btnLogout" class="text-xs text-red-500 hover:text-red-700 font-semibold ml-2 flex-shrink-0 cursor-pointer">Sair</button>
     </div>
   </div>
 
   <div class="flex-1 overflow-y-auto p-5 space-y-6">
     <div id="cardVideosInput" class="space-y-2">
       <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Fontes de Dados</label>
-      <textarea id="videoInput" placeholder="https://youtube.com/watch?v=...&#10;Cole links ou IDs (um por linha)" class="w-full h-28 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none resize-none transition-all shadow-sm" oninput="onVideoInput()"></textarea>
+      <textarea id="videoInput" placeholder="https://youtube.com/watch?v=...&#10;Cole links ou IDs (um por linha)" class="w-full h-28 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none resize-none transition-all shadow-sm"></textarea>
       <div id="videoBadge" class="empty:hidden"></div>
     </div>
 
@@ -73,7 +59,7 @@
       <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Filtro de Palavras</label>
       <div class="flex gap-2">
         <input type="text" id="kwInput" placeholder="Ex: inteligência..." class="flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none shadow-sm" />
-        <button type="button" onclick="addKw()" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 rounded-lg text-sm font-medium transition-colors border border-slate-200 cursor-pointer">Add</button>
+        <button type="button" id="btnAddKw" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-3 rounded-lg text-sm font-medium transition-colors border border-slate-200 cursor-pointer">Add</button>
       </div>
       <div id="tagArea" class="flex flex-wrap gap-1.5 mt-2 min-h-[24px]">
         <span class="text-xs text-slate-400">Sem filtros (exibe todos)</span>
@@ -100,16 +86,16 @@
       <div>
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Ordenar por</label>
         <div class="flex bg-slate-100 p-1 rounded-lg border border-slate-200">
-          <button type="button" id="orderRel" class="flex-1 py-1.5 text-xs font-medium rounded-md bg-white shadow-sm text-brand-600 border border-slate-200" onclick="setOrder('relevance')">Visualizações</button>
-          <button type="button" id="orderDate" class="flex-1 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-700" onclick="setOrder('date')">Recentes</button>
+          <button type="button" id="orderRel" class="flex-1 py-1.5 text-xs font-medium rounded-md bg-white shadow-sm text-brand-600 border border-slate-200">Visualizações</button>
+          <button type="button" id="orderDate" class="flex-1 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-700">Recentes</button>
         </div>
       </div>
       <div>
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Resultados</label>
         <div class="flex gap-2">
-          <button type="button" id="cnt10" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100" onclick="setCount(10)">10</button>
-          <button type="button" id="cnt20" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-brand-500 bg-brand-50 text-brand-700" onclick="setCount(20)">20</button>
-          <button type="button" id="cnt50" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100" onclick="setCount(50)">50</button>
+          <button type="button" id="cnt10" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100">10</button>
+          <button type="button" id="cnt20" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-brand-500 bg-brand-50 text-brand-700">20</button>
+          <button type="button" id="cnt50" class="flex-1 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100">50</button>
         </div>
       </div>
     </div>
@@ -142,7 +128,7 @@
     <div id="cardHistory" class="space-y-2 border-t border-slate-200 pt-4 hidden">
       <div class="flex items-center justify-between">
         <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Histórico de Pesquisas</label>
-        <button type="button" onclick="clearSearchHistory()" class="text-[11px] text-red-500 hover:underline">Limpar</button>
+        <button type="button" id="btnClearHistory" class="text-[11px] text-red-500 hover:underline">Limpar</button>
       </div>
       <div id="historyListContainer" class="space-y-1.5 max-h-48 overflow-y-auto text-xs"></div>
     </div>
@@ -152,12 +138,12 @@
         <span class="font-bold">⚠</span><span id="errorMsg"></span>
       </div>
 
-      <button type="button" id="btnSearch" onclick="doSearch()" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer">
+      <button type="button" id="btnSearch" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 px-4 rounded-xl flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
         Extrair Comentários
       </button>
 
-      <button type="button" id="btnVideoSearch" onclick="doVideoSearch()" class="hidden w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 px-4 rounded-xl items-center justify-center gap-2 transition-all shadow-sm cursor-pointer">
+      <button type="button" id="btnVideoSearch" class="hidden w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 px-4 rounded-xl items-center justify-center gap-2 transition-all shadow-sm cursor-pointer">
         <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
         Buscar Vídeos
       </button>
@@ -171,12 +157,12 @@
             <input type="checkbox" id="exp_pptx" class="accent-brand-500 w-4 h-4"> Slide (.pptx)
           </label>
         </div>
-        <button type="button" id="btnExport" onclick="doExport()" class="hidden w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all shadow-sm text-sm cursor-pointer">
+        <button type="button" id="btnExport" class="hidden w-full bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 font-medium py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 transition-all shadow-sm text-sm cursor-pointer">
           <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg> Exportar Relatório
         </button>
       </div>
 
-      <button type="button" id="btnClear" onclick="clearAll()" class="hidden w-full text-slate-400 hover:text-red-500 font-medium py-2 text-sm transition-colors cursor-pointer">Limpar Sessão</button>
+      <button type="button" id="btnClear" class="hidden w-full text-slate-400 hover:text-red-500 font-medium py-2 text-sm transition-colors cursor-pointer">Limpar Sessão</button>
     </div>
   </div>
 </aside>
@@ -184,8 +170,8 @@
 <main class="flex-1 flex flex-col h-1/2 md:h-full relative overflow-hidden bg-slate-50">
   
   <header class="bg-white border-b border-slate-200 px-6 pt-4 flex gap-6">
-    <button type="button" id="tabComments" onclick="switchTab('comments')" class="pb-3 text-sm font-medium border-b-2 border-brand-500 text-brand-600 transition-colors cursor-pointer">Comentários (Alvos)</button>
-    <button type="button" id="tabVideos" onclick="switchTab('videos')" class="pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors cursor-pointer">Pesquisa de Vídeos</button>
+    <button type="button" id="tabComments" class="pb-3 text-sm font-medium border-b-2 border-brand-500 text-brand-600 transition-colors cursor-pointer">Comentários (Alvos)</button>
+    <button type="button" id="tabVideos" class="pb-3 text-sm font-medium border-b-2 border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 transition-colors cursor-pointer">Pesquisa de Vídeos</button>
   </header>
 
   <div id="panelComments" class="flex-1 overflow-y-auto p-6 md:p-8">
@@ -199,7 +185,7 @@
         <h2 class="text-lg font-bold text-slate-800">Resultados Encontrados</h2>
         <span id="badgeCount" class="inline-block mt-1 bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full text-xs font-semibold"></span>
       </div>
-      <input type="text" id="searchInline" placeholder="Buscar no texto do comentário..." class="w-full md:w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none shadow-sm bg-white" oninput="applyInline()" />
+      <input type="text" id="searchInline" placeholder="Buscar no texto do comentário..." class="w-full md:w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-brand-500 outline-none shadow-sm bg-white" />
     </div>
 
     <div id="resArea" class="space-y-3">
@@ -225,540 +211,6 @@
 
 </main>
 
-<script>
-// CONFIGURAÇÃO DO SUPABASE (Credenciais Reais)
-const SUPABASE_URL = "https://swumxtcnknwuyramygwf.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_Y2qmuYPREDMqdfcvO_JU2w_8jHtGHmF";
-
-let sbClient = null;
-if (window.supabase && typeof window.supabase.createClient === 'function' && SUPABASE_URL.startsWith("https://")) {
-  try {
-    sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  } catch (e) {
-    console.warn("Supabase não pôde ser iniciado:", e);
-  }
-}
-
-let videoOrder = 'relevance';
-let videoCount = 20;
-let currentVideos = [];
-let currentQuery = '';
-let allResults = [];
-let keywords = [];
-
-// AUTENTICAÇÃO
-async function loginWithGoogle() {
-  if (!sbClient) return alert("Por favor, verifique a inicialização do Supabase.");
-  const { error } = await sbClient.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: window.location.origin }
-  });
-  if (error) showErr("Erro no login: " + error.message);
-}
-
-async function logout() {
-  if (!sbClient) return;
-  await sbClient.auth.signOut();
-  window.location.reload();
-}
-
-async function getAuthToken() {
-  if (!sbClient) return null;
-  const { data: { session } } = await sbClient.auth.getSession();
-  return session ? session.access_token : null;
-}
-
-window.addEventListener('DOMContentLoaded', async () => {
-  if (!sbClient) return;
-  try {
-    const { data: { user } } = await sbClient.auth.getUser();
-    if (user) {
-      document.getElementById('loggedOutView').classList.add('hidden');
-      document.getElementById('loggedInView').classList.remove('hidden');
-
-      document.getElementById('userName').textContent = user.user_metadata.full_name || 'Usuário';
-      document.getElementById('userEmail').textContent = user.email;
-      document.getElementById('userAvatar').src = user.user_metadata.avatar_url || 'https://via.placeholder.com/40';
-
-      renderHistoryUI();
-    } else {
-      document.getElementById('loggedOutView').classList.remove('hidden');
-      document.getElementById('loggedInView').classList.add('hidden');
-    }
-  } catch (e) {
-    console.warn("Erro ao buscar dados do usuário:", e);
-  }
-});
-
-function switchTab(tab) {
-  const isC = (tab === 'comments');
-  
-  document.getElementById('tabComments').className = `pb-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${isC ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`;
-  document.getElementById('tabVideos').className = `pb-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${!isC ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`;
-  
-  document.getElementById('panelComments').style.display = isC ? 'block' : 'none';
-  document.getElementById('panelVideos').style.display = !isC ? 'block' : 'none';
-  
-  document.getElementById('cardVideosInput').style.display = isC ? 'block' : 'none';
-  document.getElementById('cardKeywords').style.display = isC ? 'block' : 'none';
-  document.getElementById('cardDisplayCols').style.display = isC ? 'block' : 'none';
-  document.getElementById('cardExportOpts').style.display = isC ? 'block' : 'none';
-  
-  document.getElementById('cardVideoSearch').style.display = isC ? 'none' : 'block';
-  document.getElementById('cardVideoFilters').style.display = isC ? 'none' : 'block';
-  document.getElementById('cardHistory').style.display = isC ? 'none' : 'block';
-  
-  document.getElementById('btnSearch').style.display = isC ? 'flex' : 'none';
-  document.getElementById('btnVideoSearch').style.display = isC ? 'none' : 'flex';
-  
-  if (!isC) {
-    document.getElementById('btnExport').classList.add('hidden');
-    document.getElementById('btnClear').classList.add('hidden');
-  } else if (allResults && allResults.length > 0) {
-    document.getElementById('btnExport').classList.remove('hidden');
-    document.getElementById('btnClear').classList.remove('hidden');
-  }
-}
-
-function setOrder(order) {
-  videoOrder = order;
-  const rel = document.getElementById('orderRel');
-  const dat = document.getElementById('orderDate');
-  
-  rel.className = order === 'relevance' 
-    ? 'flex-1 py-1.5 text-xs font-medium rounded-md bg-white shadow-sm text-brand-600 border border-slate-200' 
-    : 'flex-1 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-700';
-    
-  dat.className = order === 'date' 
-    ? 'flex-1 py-1.5 text-xs font-medium rounded-md bg-white shadow-sm text-brand-600 border border-slate-200' 
-    : 'flex-1 py-1.5 text-xs font-medium rounded-md text-slate-500 hover:text-slate-700';
-}
-
-function setCount(n) {
-  videoCount = n;
-  ['cnt10','cnt20','cnt50'].forEach(id => {
-    const el = document.getElementById(id);
-    const num = parseInt(el.textContent);
-    el.className = (num === n) 
-      ? 'flex-1 py-1.5 text-xs font-medium rounded-lg border border-brand-500 bg-brand-50 text-brand-700 transition-colors' 
-      : 'flex-1 py-1.5 text-xs font-medium rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 transition-colors';
-  });
-}
-
-const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-function fmtNum(n) {
-  if (n >= 1e9) return (n/1e9).toFixed(1).replace('.0','') + 'bi';
-  if (n >= 1e6) return (n/1e6).toFixed(1).replace('.0','') + 'M';
-  if (n >= 1e3) return (n/1e3).toFixed(1).replace('.0','') + 'K';
-  return String(n);
-}
-function fmtDate(iso) { try { return new Date(iso).toLocaleDateString('pt-BR'); } catch { return iso; } }
-
-function toast(msg) {
-  const t = document.getElementById('toast');
-  t.innerHTML = `<svg class="w-5 h-5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg> ${msg}`;
-  t.classList.remove('translate-y-24', 'opacity-0');
-  clearTimeout(t._t); 
-  t._t = setTimeout(() => t.classList.add('translate-y-24', 'opacity-0'), 3000);
-}
-
-function showErr(msg) { document.getElementById('errorMsg').textContent=msg; document.getElementById('errorBox').classList.remove('hidden'); document.getElementById('errorBox').classList.add('flex'); }
-function hideErr() { document.getElementById('errorBox').classList.add('hidden'); document.getElementById('errorBox').classList.remove('flex'); }
-
-function sendToComments(url) {
-  const ta = document.getElementById('videoInput');
-  ta.value = ta.value.trim() ? ta.value.trim() + '\n' + url : url;
-  onVideoInput();
-  switchTab('comments');
-  toast('Adicionado à fila de extração!');
-}
-
-async function saveSearchToHistory(params, totalResults) {
-  try {
-    const token = await getAuthToken();
-    if (!token) return;
-
-    await fetch('/api/history', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        query: params.q,
-        region: params.regionCode || 'BR',
-        year: params.dateFilter || 'ALL',
-        order: params.order || 'relevance',
-        totalResults: totalResults
-      })
-    });
-    renderHistoryUI();
-  } catch (e) {
-    console.error("Erro ao salvar histórico:", e);
-  }
-}
-
-async function renderHistoryUI() {
-  const container = document.getElementById('historyListContainer');
-  if (!container) return;
-
-  try {
-    const token = await getAuthToken();
-    if (!token) {
-      container.innerHTML = '<p class="text-slate-400 p-1">Faça login para salvar o histórico.</p>';
-      return;
-    }
-
-    const res = await fetch('/api/history', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    const history = await res.json();
-
-    if (!Array.isArray(history) || !history.length) {
-      container.innerHTML = '<p class="text-slate-400 p-1">Nenhum histórico registrado.</p>';
-      return;
-    }
-
-    container.innerHTML = history.map(item => `
-      <div class="p-2 hover:bg-slate-100 rounded-lg border border-slate-100 transition-colors cursor-pointer flex justify-between items-center group" onclick='loadSearchFromHistory(${JSON.stringify({
-        q: item.query,
-        regionCode: item.region,
-        dateFilter: item.year,
-        order: item.order_by
-      })})'>
-        <div class="truncate pr-2">
-          <div class="font-semibold text-slate-800 truncate">${esc(item.query)}</div>
-          <div class="text-[10px] text-slate-400">${item.region} • ${item.year} • ${item.total_results} vids</div>
-        </div>
-        <span class="text-[10px] text-slate-400 flex-shrink-0">${new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-      </div>
-    `).join('');
-  } catch (e) {
-    container.innerHTML = '<p class="text-red-400 p-1">Erro ao carregar histórico.</p>';
-  }
-}
-
-async function clearSearchHistory() {
-  try {
-    const token = await getAuthToken();
-    if (!token) return;
-
-    await fetch('/api/history', { 
-      method: 'DELETE',
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    renderHistoryUI();
-  } catch (e) {
-    console.error("Erro ao limpar histórico:", e);
-  }
-}
-
-function loadSearchFromHistory(params) {
-  if (!params) return;
-  if (params.q) document.getElementById('videoQuery').value = params.q;
-  if (params.regionCode) document.getElementById('regionSelect').value = params.regionCode;
-  if (params.dateFilter) document.getElementById('dateSelect').value = params.dateFilter;
-  if (params.order) setOrder(params.order);
-  if (params.maxResults) setCount(params.maxResults);
-  doVideoSearch();
-}
-
-function onVideoInput() {
-  const val = document.getElementById('videoInput').value.trim();
-  const badge = document.getElementById('videoBadge');
-  if (!val) { badge.innerHTML = ''; return; }
-  const lines = val.split('\n').filter(l => l.trim().length > 0);
-  badge.innerHTML = `<span class="inline-block bg-slate-100 text-slate-600 text-xs px-2 py-0.5 rounded font-medium">${lines.length} fonte(s) identificada(s)</span>`;
-}
-
-function addKw() {
-  const input = document.getElementById('kwInput');
-  const val = input.value.trim().toLowerCase();
-  if (!val || keywords.includes(val)) return;
-  keywords.push(val);
-  input.value = '';
-  renderTags();
-}
-
-function removeKw(kw) {
-  keywords = keywords.filter(k => k !== kw);
-  renderTags();
-}
-
-function renderTags() {
-  const area = document.getElementById('tagArea');
-  if (!keywords.length) {
-    area.innerHTML = '<span class="text-xs text-slate-400">Sem filtros (exibe todos)</span>';
-    return;
-  }
-  area.innerHTML = keywords.map(k => `
-    <span class="inline-flex items-center gap-1 bg-brand-50 text-brand-700 text-xs px-2 py-1 rounded-md border border-brand-100 font-medium">
-      ${esc(k)}
-      <button type="button" onclick="removeKw('${esc(k)}')" class="hover:text-brand-900 font-bold ml-1">&times;</button>
-    </span>
-  `).join('');
-}
-
-async function doSearch() {
-  const raw = document.getElementById('videoInput').value.trim();
-  if (!raw) return showErr('Informe ao menos uma URL ou ID do YouTube.');
-  hideErr();
-
-  const urls = raw.split('\n').map(s => s.trim()).filter(Boolean);
-  const progCard = document.getElementById('progCard');
-  const progList = document.getElementById('progList');
-  progCard.classList.remove('hidden');
-  progList.innerHTML = '';
-
-  allResults = [];
-
-  for (let i = 0; i < urls.length; i++) {
-    const url = urls[i];
-    const itemEl = document.createElement('div');
-    itemEl.className = 'flex items-center justify-between text-xs text-slate-600 bg-slate-50 p-2 rounded border border-slate-100';
-    itemEl.innerHTML = `<span class="truncate max-w-[200px]">${esc(url)}</span><span class="font-bold text-brand-600">Extraindo...</span>`;
-    progList.appendChild(itemEl);
-
-    try {
-      const token = await getAuthToken();
-      const res = await fetch('/api/comments', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-        },
-        body: JSON.stringify({ url, keywords })
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Erro na requisição');
-
-      allResults.push(...(data.comments || []));
-      itemEl.querySelector('span:last-child').className = 'font-bold text-green-600';
-      itemEl.querySelector('span:last-child').textContent = `${data.comments?.length || 0} comentário(s)`;
-    } catch (err) {
-      itemEl.querySelector('span:last-child').className = 'font-bold text-red-500';
-      itemEl.querySelector('span:last-child').textContent = 'Erro';
-    }
-  }
-
-  renderComments();
-}
-
-function renderComments() {
-  const area = document.getElementById('resArea');
-  const resHeader = document.getElementById('resHeader');
-  const badge = document.getElementById('badgeCount');
-
-  if (!allResults.length) {
-    area.innerHTML = `<div class="p-8 text-center text-slate-400 text-sm">Nenhum comentário encontrado com os filtros selecionados.</div>`;
-    resHeader.classList.add('hidden');
-    return;
-  }
-
-  badge.textContent = `${allResults.length} comentário(s)`;
-  resHeader.classList.remove('hidden');
-  document.getElementById('btnExport').classList.remove('hidden');
-  document.getElementById('btnClear').classList.remove('hidden');
-
-  area.innerHTML = allResults.map(c => `
-    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
-      <div class="flex items-center justify-between text-xs text-slate-500">
-        <span class="font-bold text-slate-700">${esc(c.author || 'Anônimo')}</span>
-        <span>${fmtDate(c.publishedAt)}</span>
-      </div>
-      <p class="text-sm text-slate-800 whitespace-pre-line">${esc(c.text)}</p>
-      <div class="flex items-center justify-between pt-2 text-xs text-slate-400 border-t border-slate-50">
-        <span>👍 ${c.likes || 0}</span>
-        ${c.url ? `<a href="${c.url}" target="_blank" class="text-brand-600 hover:underline">Ver no YouTube</a>` : ''}
-      </div>
-    </div>
-  `).join('');
-}
-
-async function doVideoSearch() {
-  const q = document.getElementById('videoQuery').value.trim();
-  if (!q) return showErr('Digite um termo para pesquisar vídeos.');
-  hideErr();
-
-  const regionCode = document.getElementById('regionSelect').value;
-  const dateFilter = document.getElementById('dateSelect').value;
-
-  try {
-    const token = await getAuthToken();
-    const res = await fetch('/api/videos', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-      },
-      body: JSON.stringify({ q, regionCode, dateFilter, order: videoOrder, maxResults: videoCount })
-    });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Erro ao buscar vídeos');
-
-    currentVideos = data.videos || [];
-    currentQuery = q;
-
-    saveSearchToHistory({ q, regionCode, dateFilter, order: videoOrder, maxResults: videoCount }, currentVideos.length);
-    renderVideos();
-  } catch (err) {
-    showErr(err.message);
-  }
-}
-
-function renderVideos() {
-  const container = document.getElementById('videoResArea');
-  if (!currentVideos.length) {
-    container.innerHTML = `<div class="p-8 text-center text-slate-400 text-sm">Nenhum vídeo retornado para esta busca.</div>`;
-    return;
-  }
-
-  container.innerHTML = `
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      ${currentVideos.map(v => `
-        <div class="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm flex flex-col justify-between hover:shadow-md transition-shadow">
-          <div>
-            ${v.thumbnail ? `<img src="${v.thumbnail}" class="w-full aspect-video object-cover" />` : ''}
-            <div class="p-4 space-y-2">
-              <h3 class="font-bold text-sm text-slate-800 line-clamp-2">${esc(v.title)}</h3>
-              <p class="text-xs text-slate-500 truncate">${esc(v.channel)} •${fmtDate(v.publishedAt)}</p>
-              <div class="flex gap-4 text-xs text-slate-600 pt-1">
-                <span>👁 ${fmtNum(v.views || 0)}</span>
-                <span>👍 ${fmtNum(v.likes || 0)}</span>
-                <span>💬 ${fmtNum(v.comments || 0)}</span>
-              </div>
-            </div>
-          </div>
-          <div class="p-4 pt-0 flex gap-2">
-            <button type="button" onclick="sendToComments('${v.url}')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-2 rounded-lg text-xs transition-colors cursor-pointer text-center">
-              Extrair Comentários
-            </button>
-            <a href="${v.url}" target="_blank" class="px-3 bg-white border border-slate-200 hover:bg-slate-50 text-slate-600 font-medium py-2 rounded-lg text-xs transition-colors flex items-center justify-center gap-1 text-center">
-              Ver no YouTube ↗
-            </a>
-          </div>
-        </div>
-      `).join('')}
-    </div>
-  `;
-}
-
-function exportToExcel(videos, queryTerm) {
-  if (!videos || !videos.length) return showErr('Nenhum vídeo disponível para exportar.');
-
-  const formattedData = videos.map((v, index) => {
-    const engRate = v.views > 0 ? (((v.likes + v.comments) / v.views) * 100).toFixed(2) : '0.00';
-    return {
-      "Posição": `#${index + 1}`,
-      "Título do Vídeo": v.title,
-      "Canal": v.channel,
-      "Visualizações": v.views,
-      "Curtidas": v.likes,
-      "Comentários": v.comments,
-      "Taxa Engajamento (%)": `${engRate}%`,
-      "Duração (s)": v.duration,
-      "Data Publicação": fmtDate(v.publishedAt),
-      "Link": v.url
-    };
-  });
-
-  const worksheet = XLSX.utils.json_to_sheet(formattedData);
-  worksheet['!cols'] = [
-    { wch: 8 }, { wch: 45 }, { wch: 25 }, { wch: 15 },
-    { wch: 12 }, { wch: 14 }, { wch: 18 }, { wch: 12 }, { wch: 16 }, { wch: 35 }
-  ];
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Resultados Mapeados");
-  XLSX.writeFile(workbook, `Relatorio_YouTube_${queryTerm.replace(/[^a-zA-Z0-9]/g, '_')}_${Date.now()}.xlsx`);
-  toast('Relatório Excel exportado!');
-}
-
-function exportCommentsToExcel(comments) {
-  if (!comments || !comments.length) return showErr('Não há comentários para exportar.');
-
-  const totalLikes = comments.reduce((acc, c) => acc + (c.likes || 0), 0);
-  const avgLikes = (totalLikes / comments.length).toFixed(1);
-
-  const excelRows = [
-    ["RELATÓRIO ANALÍTICO DE COMENTÁRIOS — YOUTUBE"],
-    [`Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`],
-    [],
-    ["MÉTRICAS GERAIS"],
-    ["Total de Comentários Mapeados", comments.length],
-    ["Total de Curtidas", totalLikes],
-    ["Média de Curtidas por Comentário", parseFloat(avgLikes)],
-    [],
-    ["DETALHAMENTO DOS COMENTÁRIOS"],
-    ["#", "Autor", "Comentário", "Curtidas", "Data de Publicação", "Vídeo de Origem", "Link do Vídeo"]
-  ];
-
-  comments.forEach((c, index) => {
-    excelRows.push([
-      index + 1,
-      c.author || 'Anônimo',
-      c.text || '',
-      c.likes || 0,
-      fmtDate(c.publishedAt),
-      c.videoTitle || 'N/A',
-      c.url || ''
-    ]);
-  });
-
-  const worksheet = XLSX.utils.aoa_to_sheet(excelRows);
-  worksheet['!cols'] = [
-    { wch: 6 }, { wch: 22 }, { wch: 70 }, { wch: 12 }, { wch: 16 }, { wch: 35 }, { wch: 40 }
-  ];
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Análise de Comentários");
-  XLSX.writeFile(workbook, `Relatorio_Comentarios_YouTube_${Date.now()}.xlsx`);
-  toast('Relatório Excel exportado com sucesso!');
-}
-
-function doExport() {
-  const isXlsx = document.getElementById('exp_xlsx').checked;
-  if (!isXlsx) return showErr('Selecione pelo menos um formato de exportação.');
-  hideErr();
-
-  if (document.getElementById('panelVideos').style.display === 'block') {
-    if (isXlsx) exportToExcel(currentVideos, currentQuery);
-  } else {
-    if (isXlsx) exportCommentsToExcel(allResults);
-  }
-}
-
-function clearAll() {
-  allResults = [];
-  document.getElementById('videoInput').value = '';
-  document.getElementById('resHeader').classList.add('hidden');
-  document.getElementById('btnExport').classList.add('hidden');
-  document.getElementById('btnClear').classList.add('hidden');
-  document.getElementById('resArea').innerHTML = `
-    <div class="h-64 flex flex-col items-center justify-center text-slate-400 text-center">
-      <svg class="w-12 h-12 mb-3 opacity-20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
-      <p class="text-sm">Preencha as URLs na barra lateral e clique em <strong class="text-slate-600">Extrair</strong></p>
-    </div>`;
-  toast('Sessão limpa!');
-}
-
-function applyInline() {
-  const term = document.getElementById('searchInline').value.toLowerCase();
-  if (!term) return renderComments();
-  const filtered = allResults.filter(c => c.text && c.text.toLowerCase().includes(term));
-  
-  const area = document.getElementById('resArea');
-  area.innerHTML = filtered.map(c => `
-    <div class="bg-white p-4 rounded-xl border border-slate-200 shadow-sm space-y-2">
-      <div class="flex items-center justify-between text-xs text-slate-500">
-        <span class="font-bold text-slate-700">${esc(c.author || 'Anônimo')}</span>
-        <span>${fmtDate(c.publishedAt)}</span>
-      </div>
-      <p class="text-sm text-slate-800 whitespace-pre-line">${esc(c.text)}</p>
-    </div>
-  `).join('');
-}
-</script>
+<script src="/assets/js/app.js"></script>
 </body>
 </html>

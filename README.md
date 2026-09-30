@@ -1,63 +1,72 @@
-YouTube Comment Finder
+# Análise YouTube — Buscador de Comentários e Vídeos
 
-Ferramenta web para buscar, filtrar e exportar comentários de vídeos do YouTube por palavras-chave. Desenvolvida em HTML e JavaScript puro com um backend seguro em Vercel Serverless Functions.
+Aplicação web para pesquisar vídeos do YouTube, extrair comentários por vídeo, filtrar termos e gerar relatórios em Excel e PowerPoint.
 
-Funcionalidades
+## Estrutura
 
-Busca Multi-vídeo: Insira um ou vários links de vídeos do YouTube simultaneamente.
-Filtros por Palavras-chave: Localize termos específicos nos comentários com destaque visual automático nos resultados.
-Filtro em Tempo Real: Refine os dados já carregados instantaneamente.
-Exportação: Baixe os resultados filtrados em formatos Excel (.xlsx) ou CSV, selecionando as colunas desejadas.
-Segurança: A chave da API do YouTube permanece isolada no servidor, sem exposição no navegador.
-Responsividade: Compatível com dispositivos móveis, tablets e computadores, sem necessidade de instalação.
+```text
+├── index.html
+├── assets/
+│   ├── css/
+│   │   └── styles.css
+│   ├── img/
+│   │   └── avatar-placeholder.svg
+│   └── js/
+│       ├── app.js
+│       └── tailwind.config.js
+├── api/
+│   ├── comments.js
+│   ├── history.js
+│   ├── title.js
+│   └── videos.js
+├── supabase/
+│   └── schema.sql
+└── vercel.json
+```
 
- Estrutura do Projeto
+O `index.html` contém apenas a estrutura da página. Os estilos próprios ficam em `assets/css/styles.css` e a lógica da aplicação fica em `assets/js/app.js`.
 
-O frontend estático comunica-se exclusivamente com funções de servidor protegidas:
+## Autenticação com Google + histórico
 
-text
+A aplicação usa Supabase Auth. O botão de Google agora acompanha o estado real da sessão por `onAuthStateChange`, evitando que a tela volte para o estado “deslogado” depois do retorno do OAuth.
 
-├── index.html        # Interface completa (HTML, CSS e Vanilla JS)
-├── vercel.json       # Configuração de roteamento e headers
-└── api/
-    ├── comments.js   # Intermediação com a YouTube Data API v3
-    └── title.js      # Recuperação do título dos vídeos
-Nota de Segurança: O frontend não realiza requisições diretas para o YouTube. As chamadas passam por /api, executadas no ambiente do Vercel onde a chave de API é mantida em variáveis de ambiente.
+Para o histórico de pesquisas, execute **uma vez** o arquivo `supabase/schema.sql` no **Supabase Dashboard → SQL Editor**. Ele cria a tabela `public.search_history`, o índice e as políticas de Row Level Security para cada usuário acessar apenas o próprio histórico.
 
-Tecnologias Utilizadas
-Frontend: HTML5, CSS3 e JavaScript (Vanilla)
+Também é necessário configurar o provedor Google no Supabase Auth. O fluxo `signInWithOAuth({ provider: 'google', options: { redirectTo } })` precisa usar uma URL que esteja na lista de Redirect URLs permitidas no projeto; a própria documentação do Supabase recomenda configurar o Site URL de produção e os redirects de desenvolvimento/preview. Consulte o callback exibido na página do provedor Google do seu projeto ao configurar o OAuth. 
 
-Manipulação de Planilhas: SheetJS (XLSX) via CDN
+## Variáveis do Vercel
 
-Backend: Vercel Serverless Functions (Node.js)
+Configure no projeto:
 
-API Externa: YouTube Data API v3
+```text
+YOUTUBE_API_KEY=...
+SUPABASE_URL=https://seu-projeto.supabase.co
+SUPABASE_ANON_KEY=...
+```
 
-Como Publicar no Vercel
-O projeto requer suporte a Serverless Functions para operar as rotas de API (/api). Abrir o arquivo index.html diretamente no navegador resulta em bloqueio de CORS.
+As chaves públicas do Supabase podem ser usadas no frontend; a chave da API do YouTube deve continuar apenas no ambiente do servidor.
 
-Passos para o Deploy:
-Obtenha uma Chave de API:
+## Relatórios
 
-Acesse o Google Cloud Console.
+### Excel
 
-Crie um projeto, ative a YouTube Data API v3 e gere uma chave de credencial.
+As exportações agora usam uma biblioteca com suporte a estilos de célula e geram relatórios com:
 
-Realize o Deploy:
+- aba **Resumo** com emissão, métricas e destaques;
+- aba detalhada de **Comentários** ou **Vídeos** com filtros e congelamento de cabeçalho;
+- ranking de **Autores**, **Vídeos** ou **Canais**, conforme o tipo de relatório;
+- larguras de coluna e formatação pensadas para leitura e apresentação.
 
-Acesse vercel.com.
+### PowerPoint
 
-Clique em Add New > Project e envie os arquivos do projeto.
+A exportação `.pptx` gera uma apresentação pronta para apresentação, incluindo capa, resumo executivo, métricas, concentração por autor/canal, critérios de pesquisa e páginas de detalhamento.
 
-Configure a seguinte variável de ambiente antes de finalizar:
+## Publicação na Vercel
 
-YOUTUBE_API_KEY = sua_chave_de_api_aqui
+O projeto usa Vercel Serverless Functions em `/api`. Faça o deploy do diretório inteiro e configure as variáveis de ambiente antes de publicar.
 
-Clique em Deploy.
+A configuração de rotas não referencia mais a antiga rota `/api/search`, que não existe neste projeto.
 
-Para atualizações futuras, acesse a aba Deployments no Vercel e selecione Redeploy.
+## Observação sobre a API do YouTube
 
-Limitações e Cota da API
-A cota padrão gratuita da YouTube Data API v3 é de 10.000 unidades diárias.
-
-Cada lote de até 100 comentários consome aproximadamente 1 unidade, sendo adequada para uso moderado.
+A quantidade de comentários disponível depende do que a YouTube Data API retorna para cada vídeo e dos limites de paginação/cota usados pelo projeto.

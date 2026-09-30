@@ -2,10 +2,11 @@
   "version": 2,
   "routes": [
     { "src": "/api/videos", "dest": "/api/videos.js" },
-    { "src": "/api/search", "dest": "/api/search.js" },
     { "src": "/api/comments", "dest": "/api/comments.js" },
     { "src": "/api/title", "dest": "/api/title.js" },
-    { "src": "/(.*)",     "dest": "/index.html" }
+    { "src": "/api/history", "dest": "/api/history.js" },
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
   ],
   "headers": [
     {
