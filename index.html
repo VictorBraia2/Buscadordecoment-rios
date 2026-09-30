@@ -36,17 +36,61 @@
       </button>
     </div>
 
-    <div id="loggedInView" class="hidden flex items-center justify-between">
-      <div class="flex items-center gap-2.5 overflow-hidden">
-        <img id="userAvatar" class="w-8 h-8 rounded-full border border-slate-300 flex-shrink-0" src="" alt="Avatar" />
-        <div class="truncate">
-          <p id="userName" class="text-xs font-bold text-slate-800 truncate"></p>
-          <p id="userEmail" class="text-[10px] text-slate-500 truncate"></p>
-        </div>
+    <div id="loggedInView" class="hidden flex-col gap-3">
+
+  <div class="flex items-center justify-between">
+    <div class="flex items-center gap-2.5 overflow-hidden">
+
+      <img
+        id="userAvatar"
+        class="w-10 h-10 rounded-full border border-slate-300 flex-shrink-0 object-cover"
+        src=""
+        alt="Avatar"
+      />
+      <div class="truncate">
+        <p
+          id="userName"
+          class="text-xs font-bold text-slate-800 truncate"
+        ></p>
+        <p
+          id="userEmail"
+          class="text-[10px] text-slate-500 truncate"
+        ></p>
       </div>
-      <button type="button" id="btnLogout" class="text-xs text-red-500 hover:text-red-700 font-semibold ml-2 flex-shrink-0 cursor-pointer">Sair</button>
+    </div>
+    <button
+      type="button"
+      id="btnLogout"
+      class="text-xs text-red-500 hover:text-red-700 font-semibold ml-2 flex-shrink-0 cursor-pointer"
+    >
+      Sair
+    </button>
+  </div>
+  <div class="bg-white border border-slate-200 rounded-lg p-3 space-y-1">
+    <div class="flex justify-between text-[11px]">
+      <span class="text-slate-400">
+        Perfil criado
+      </span>
+      <span
+        id="profileCreatedAt"
+        class="font-medium text-slate-600"
+      >
+        —
+      </span>
+    </div>
+    <div class="flex justify-between text-[11px]">
+      <span class="text-slate-400">
+        Pesquisas realizadas
+      </span>
+      <span
+        id="profileSearchCount"
+        class="font-bold text-brand-600"
+      >
+        0
+      </span>
     </div>
   </div>
+</div>
 
   <div class="flex-1 overflow-y-auto p-5 space-y-6">
     <div id="cardVideosInput" class="space-y-2">
