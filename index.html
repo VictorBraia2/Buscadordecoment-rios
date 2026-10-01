@@ -24,7 +24,7 @@
 
   <!-- SEÇÃO DE AUTENTICAÇÃO SUPABASE -->
   <div id="authSection" class="p-4 border-b border-slate-200 bg-slate-50">
-    <div id="loggedOutView">
+    <div id="loggedOutView" class="hidden">
       <button type="button" id="btnGoogleLogin" class="w-full bg-white hover:bg-slate-100 text-slate-700 font-semibold py-2 px-3 border border-slate-300 rounded-lg shadow-sm flex items-center justify-center gap-2 transition-all text-xs cursor-pointer">
         <svg class="w-4 h-4" viewBox="0 0 24 24">
           <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
@@ -43,9 +43,10 @@
 
       <img
         id="userAvatar"
-        class="w-10 h-10 rounded-full border border-slate-300 flex-shrink-0 object-cover"
-        src=""
-        alt="Avatar"
+        class="w-10 h-10 rounded-full border border-slate-300 flex-shrink-0 object-cover bg-slate-200"
+        src="/assets/img/avatar-placeholder.svg"
+        alt="Foto do perfil"
+        referrerpolicy="no-referrer"
       />
       <div class="truncate">
         <p
@@ -91,6 +92,7 @@
     </div>
   </div>
 </div>
+  </div><!-- /#authSection -->
 
   <div class="flex-1 overflow-y-auto p-5 space-y-6">
     <div id="cardVideosInput" class="space-y-2">

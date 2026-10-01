@@ -30,7 +30,9 @@ O `index.html` contém apenas a estrutura da página. Os estilos próprios ficam
 
 A aplicação usa Supabase Auth. O botão de Google agora acompanha o estado real da sessão por `onAuthStateChange`, evitando que a tela volte para o estado “deslogado” depois do retorno do OAuth.
 
-Para o histórico de pesquisas, execute **uma vez** o arquivo `supabase/schema.sql` no **Supabase Dashboard → SQL Editor**. Ele cria a tabela `public.search_history`, o índice e as políticas de Row Level Security para cada usuário acessar apenas o próprio histórico.
+O perfil (nome, foto, data de criação e total de pesquisas) aparece no lugar do botão do Google assim que a sessão é criada, e o histórico (pesquisas de vídeos e extrações de comentários) fica salvo na conta e disponível nas duas abas.
+
+Para o histórico de pesquisas, execute **uma vez** o arquivo `supabase/schema.sql` no **Supabase Dashboard → SQL Editor**. Ele cria (ou atualiza, se já existir) a tabela `public.search_history`, com a coluna `search_type`,, o índice e as políticas de Row Level Security para cada usuário acessar apenas o próprio histórico.
 
 Também é necessário configurar o provedor Google no Supabase Auth. O fluxo `signInWithOAuth({ provider: 'google', options: { redirectTo } })` precisa usar uma URL que esteja na lista de Redirect URLs permitidas no projeto; a própria documentação do Supabase recomenda configurar o Site URL de produção e os redirects de desenvolvimento/preview. Consulte o callback exibido na página do provedor Google do seu projeto ao configurar o OAuth. 
 
