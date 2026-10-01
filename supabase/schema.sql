@@ -31,6 +31,10 @@ create table if not exists public.search_history (
 );
 
 
+-- Migração: bancos criados com a versão anterior não têm a coluna search_type
+alter table public.search_history
+  add column if not exists search_type text not null default 'videos';
+
 create index if not exists profiles_email_idx
   on public.profiles(email);
 
