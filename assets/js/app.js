@@ -5,7 +5,9 @@ const SUPABASE_ANON_KEY = "sb_publishable_Y2qmuYPREDMqdfcvO_JU2w_8jHtGHmF";
 let sbClient = null;
 if (window.supabase && typeof window.supabase.createClient === 'function' && SUPABASE_URL.startsWith("https://")) {
   try {
-    sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    });
   } catch (e) {
     console.warn("Supabase não pôde ser iniciado:", e);
   }
@@ -18,39 +20,79 @@ let currentQuery = '';
 let allResults = [];
 let keywords = [];
 
-// AUTENTICAÇÃO SUPABASE
+// AUTENTICAÇÃO SUPABASE + PERFIL
 let authLoading = false;
+let currentUser = null;      // usuário logado (null = deslogado)
+let historyUserId = null;    // evita recarregar o histórico duas vezes para o mesmo usuário
+let historyItems = [];       // itens do histórico atualmente exibidos
+
+const AVATAR_FALLBACK = '/assets/img/avatar-placeholder.svg';
+const GOOGLE_BUTTON_HTML = `<svg class="w-4 h-4" viewBox="0 0 24 24">
+  <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+  <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+  <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+  <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+</svg> Continuar com o Google`;
+
+function resetLoginButton() {
+  const button = document.getElementById('btnGoogleLogin');
+  if (!button) return;
+  authLoading = false;
+  button.disabled = false;
+  button.classList.remove('opacity-60', 'cursor-wait');
+  button.innerHTML = GOOGLE_BUTTON_HTML;
+}
+
+function setProfileSearchCount(n) {
+  const el = document.getElementById('profileSearchCount');
+  if (el) el.textContent = String(Number(n) || 0);
+}
+
+function updateHistoryVisibility() {
+  // O histórico faz parte do perfil: aparece nas duas abas, mas só para quem está logado.
+  const card = document.getElementById('cardHistory');
+  if (card) card.classList.toggle('hidden', !currentUser);
+}
 
 function setAuthView(user) {
   const loggedOut = document.getElementById('loggedOutView');
   const loggedIn = document.getElementById('loggedInView');
-  const button = loggedOut?.querySelector('button');
   if (!loggedOut || !loggedIn) return;
+  currentUser = user || null;
 
   if (user) {
+    // Primeiro some com o botão de login e mostra o perfil; o preenchimento dos dados vem depois,
+    // para que um dado ausente (ex.: sem foto) nunca deixe o botão de login à mostra.
     loggedOut.classList.add('hidden');
     loggedIn.classList.remove('hidden');
-    document.getElementById('userName').textContent = user.user_metadata?.full_name || user.user_metadata?.name || 'Usuário';
-    document.getElementById('userEmail').textContent = user.email || '';
-    const avatar = user.user_metadata?.avatar_url || user.user_metadata?.picture || '';
-    document.getElementById('userAvatar').src = avatar || '/assets/img/avatar-placeholder.svg';
-  } else {
-    loggedOut.classList.remove('hidden');
-    loggedIn.classList.add('hidden');
-    if (button) {
-      button.disabled = false;
-      button.classList.remove('opacity-60', 'cursor-wait');
-      button.innerHTML = `<svg class="w-4 h-4" viewBox="0 0 24 24">
-        <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-        <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-        <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
-        <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
-      </svg> Continuar com o Google`;
+    loggedIn.classList.add('flex');
+    try {
+      const meta = user.user_metadata || {};
+      document.getElementById('userName').textContent = meta.full_name || meta.name || (user.email ? user.email.split('@')[0] : 'Usuário');
+      document.getElementById('userEmail').textContent = user.email || '';
+      const avatarEl = document.getElementById('userAvatar');
+      avatarEl.onerror = () => { avatarEl.onerror = null; avatarEl.src = AVATAR_FALLBACK; };
+      avatarEl.src = meta.avatar_url || meta.picture || AVATAR_FALLBACK;
+      const created = user.created_at ? new Date(user.created_at) : null;
+      document.getElementById('profileCreatedAt').textContent =
+        created && !isNaN(created) ? created.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+    } catch (e) {
+      console.warn('Erro ao preencher o perfil:', e);
     }
+  } else {
+    loggedIn.classList.add('hidden');
+    loggedIn.classList.remove('flex');
+    loggedOut.classList.remove('hidden');
+    resetLoginButton();
+    historyUserId = null;
+    historyItems = [];
+    setProfileSearchCount(0);
+    const created = document.getElementById('profileCreatedAt');
+    if (created) created.textContent = '—';
+    const list = document.getElementById('historyListContainer');
+    if (list) list.innerHTML = '';
   }
-
-  const historyCard = document.getElementById('cardHistory');
-  if (historyCard) historyCard.style.display = user ? 'block' : 'none';
+  updateHistoryVisibility();
 }
 
 async function loginWithGoogle() {
@@ -59,7 +101,7 @@ async function loginWithGoogle() {
   authLoading = true;
   hideErr();
 
-  const button = document.getElementById('loggedOutView')?.querySelector('button');
+  const button = document.getElementById('btnGoogleLogin');
   if (button) {
     button.disabled = true;
     button.classList.add('opacity-60', 'cursor-wait');
@@ -75,8 +117,7 @@ async function loginWithGoogle() {
   });
 
   if (error) {
-    authLoading = false;
-    setAuthView(null);
+    resetLoginButton();
     showErr(`Erro ao entrar com o Google: ${error.message}`);
   }
 }
@@ -95,26 +136,67 @@ async function getAuthToken() {
   return session?.access_token || null;
 }
 
+// Mostra erro devolvido pelo Google/Supabase no retorno do OAuth (ex.: redirect não autorizado).
+function reportAuthErrorFromUrl() {
+  const fromHash = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+  const fromQuery = new URLSearchParams(window.location.search);
+  const desc = fromQuery.get('error_description') || fromHash.get('error_description');
+  if (desc) showErr(`Erro no login: ${desc.replace(/\+/g, ' ')}`);
+}
+
+// Remove #access_token / ?code da barra de endereço depois que a sessão foi criada.
+function cleanAuthParamsFromUrl() {
+  const url = new URL(window.location.href);
+  const authKeys = ['code', 'error', 'error_code', 'error_description'];
+  const hasHash = /access_token|refresh_token|error_description/.test(url.hash);
+  const hasQuery = authKeys.some(k => url.searchParams.has(k));
+  if (!hasHash && !hasQuery) return;
+  authKeys.forEach(k => url.searchParams.delete(k));
+  window.history.replaceState({}, document.title, url.pathname + url.search);
+}
+
+function loadHistoryOnce(user) {
+  if (!user || historyUserId === user.id) return;
+  historyUserId = user.id;
+  // Fora do callback do Supabase Auth, para evitar reentrância.
+  setTimeout(() => renderHistoryUI(), 0);
+}
+
 async function initializeAuth() {
   if (!sbClient) {
     setAuthView(null);
+    showErr('Não foi possível carregar o login com o Google. Recarregue a página ou verifique sua conexão.');
     return;
   }
 
-  const { data: { session }, error } = await sbClient.auth.getSession();
-  if (error) console.warn('Erro ao restaurar a sessão:', error);
-  setAuthView(session?.user || null);
-  if (session?.user) await renderHistoryUI();
+  reportAuthErrorFromUrl();
 
-  sbClient.auth.onAuthStateChange((event, sessionState) => {
+  // Registrar o listener ANTES de pedir a sessão garante que nenhum evento do retorno do OAuth se perca.
+  sbClient.auth.onAuthStateChange((event, session) => {
+    const wasLoggedIn = !!currentUser;
     authLoading = false;
-    setAuthView(sessionState?.user || null);
-    if (sessionState?.user) {
-      // Aguarda o callback terminar antes de consultar a tabela, evitando reentrância no Supabase Auth.
-      setTimeout(() => renderHistoryUI(), 0);
+    setAuthView(session?.user || null);
+    if (session?.user) {
+      loadHistoryOnce(session.user);
+      if (event === 'SIGNED_IN') {
+        cleanAuthParamsFromUrl();
+        if (!wasLoggedIn) toast('Login realizado com sucesso.');
+      }
     }
-    if (event === 'SIGNED_IN') toast('Login realizado com sucesso.');
   });
+
+  try {
+    const { data: { session }, error } = await sbClient.auth.getSession();
+    if (error) console.warn('Erro ao restaurar a sessão:', error);
+    setAuthView(session?.user || null);
+    if (session?.user) {
+      cleanAuthParamsFromUrl();
+      loadHistoryOnce(session.user);
+    }
+  } catch (e) {
+    console.error('Falha ao verificar a sessão:', e);
+    setAuthView(null);
+  }
 }
 
 function bindUIEvents() {
@@ -155,13 +237,10 @@ function bindUIEvents() {
 
   const historyList = document.getElementById('historyListContainer');
   historyList?.addEventListener('click', event => {
-    const item = event.target.closest('[data-history]');
+    const item = event.target.closest('[data-history-index]');
     if (!item) return;
-    try {
-      loadSearchFromHistory(JSON.parse(item.dataset.history));
-    } catch (error) {
-      console.error('Histórico inválido:', error);
-    }
+    const entry = historyItems[Number(item.dataset.historyIndex)];
+    if (entry) loadSearchFromHistory(entry);
   });
 
   const videoArea = document.getElementById('videoResArea');
@@ -174,6 +253,11 @@ function bindUIEvents() {
 window.addEventListener('DOMContentLoaded', () => {
   bindUIEvents();
   initializeAuth();
+});
+
+// Voltando do Google com o botão "Voltar" (cache de página), destrava o botão de login.
+window.addEventListener('pageshow', event => {
+  if (event.persisted && !currentUser) resetLoginButton();
 });
 
 function switchTab(tab) {
@@ -192,7 +276,6 @@ function switchTab(tab) {
   
   document.getElementById('cardVideoSearch').style.display = isC ? 'none' : 'block';
   document.getElementById('cardVideoFilters').style.display = isC ? 'none' : 'block';
-  document.getElementById('cardHistory').style.display = isC ? 'none' : 'block';
   
   document.getElementById('btnSearch').style.display = isC ? 'flex' : 'none';
   document.getElementById('btnVideoSearch').style.display = isC ? 'none' : 'flex';
@@ -259,30 +342,35 @@ function sendToComments(url) {
   toast('Adicionado à fila de extração!');
 }
 
-async function saveSearchToHistory(params, totalResults) {
+function friendlyHistoryError(message) {
+  return /search_history|schema cache|relation .* does not exist/i.test(message || '')
+    ? 'A tabela search_history não está disponível no Supabase. Execute o arquivo supabase/schema.sql no SQL Editor.'
+    : (message || 'Erro ao acessar o histórico.');
+}
+
+// Salva uma pesquisa no histórico do perfil (só quando há usuário logado).
+async function saveHistoryEntry({ query, region = 'BR', year = 'ALL', order = 'relevance', totalResults = 0, searchType = 'videos' }) {
   try {
     const token = await getAuthToken();
     if (!token) return;
     const res = await fetch('/api/history', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({
-        query: params.q,
-        region: params.regionCode || 'BR',
-        year: params.dateFilter || 'ALL',
-        order: params.order || 'relevance',
-        totalResults: totalResults
-      })
+      body: JSON.stringify({ query, region, year, order, totalResults, searchType })
     });
     const payload = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(payload.error || 'Não foi possível salvar o histórico.');
     await renderHistoryUI();
   } catch (e) {
     console.error('Erro ao salvar histórico:', e);
-    if (/search_history/i.test(e.message || '')) {
-      showErr('A tabela search_history não está disponível no Supabase. Execute o arquivo supabase/schema.sql no SQL Editor.');
-    }
+    showErr(friendlyHistoryError(e.message));
   }
+}
+
+function shortenSource(value) {
+  const v = String(value || '').trim();
+  const id = v.match(/(?:v=|youtu\.be\/|shorts\/|embed\/)([\w-]{11})/);
+  return id ? `youtu.be/${id[1]}` : (v.length > 34 ? v.slice(0, 34) + '…' : v);
 }
 
 async function renderHistoryUI() {
@@ -295,35 +383,42 @@ async function renderHistoryUI() {
       return;
     }
     const res = await fetch('/api/history', { headers: { 'Authorization': `Bearer ${token}` } });
-    const history = await res.json().catch(() => ({}));
+    const payload = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const message = history.error || 'Erro ao carregar o histórico.';
-      if (/search_history/i.test(message)) {
-        container.innerHTML = '<p class="text-red-400 p-1">Tabela do histórico não encontrada. Execute supabase/schema.sql.</p>';
+      container.innerHTML = `<p class="text-red-400 p-1">${esc(friendlyHistoryError(payload.error))}</p>`;
+      return;
+    }
+    // A API devolve { items, total }; aceita também o formato antigo (array puro).
+    const items = Array.isArray(payload) ? payload : (payload.items || []);
+    const total = Array.isArray(payload) ? items.length : (Number(payload.total) || items.length);
+    historyItems = items;
+    setProfileSearchCount(total);
+
+    if (!items.length) {
+      container.innerHTML = '<p class="text-slate-400 p-1">Nenhuma pesquisa registrada ainda.</p>';
+      return;
+    }
+    container.innerHTML = items.map((item, idx) => {
+      const isComments = item.search_type === 'comments';
+      const when = new Date(item.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      let title, meta;
+      if (isComments) {
+        const urls = String(item.query || '').split('\n').map(u => u.trim()).filter(Boolean);
+        title = shortenSource(urls[0]) + (urls.length > 1 ? ` (+${urls.length - 1})` : '');
+        meta = `Comentários • ${Number(item.total_results) || 0} extraído(s)`;
       } else {
-        container.innerHTML = `<p class="text-red-400 p-1">${esc(message)}</p>`;
+        title = item.query;
+        meta = `Vídeos • ${item.region} • ${item.year} • ${Number(item.total_results) || 0} vídeo(s)`;
       }
-      return;
-    }
-    if (!Array.isArray(history) || !history.length) {
-      container.innerHTML = '<p class="text-slate-400 p-1">Nenhum histórico registrado.</p>';
-      return;
-    }
-    container.innerHTML = history.map(item => `
-      <div class="history-item p-2 hover:bg-slate-100 rounded-lg border border-slate-100 transition-colors cursor-pointer flex justify-between items-center group" data-history='${esc(JSON.stringify({
-        q: item.query,
-        regionCode: item.region,
-        dateFilter: item.year,
-        order: item.order_by,
-        maxResults: Math.max(10, Math.min(50, Number(item.total_results) || 20))
-      }))}'>
-        <div class="truncate pr-2">
-          <div class="font-semibold text-slate-800 truncate">${esc(item.query)}</div>
-          <div class="text-[10px] text-slate-400">${esc(item.region)} • ${esc(item.year)} • ${Number(item.total_results) || 0} vídeo(s)</div>
+      return `
+      <div class="history-item p-2 hover:bg-slate-100 rounded-lg border border-slate-100 transition-colors cursor-pointer flex justify-between items-center gap-2" data-history-index="${idx}" title="Abrir esta pesquisa novamente">
+        <div class="truncate">
+          <div class="font-semibold text-slate-800 truncate">${esc(title)}</div>
+          <div class="text-[10px] text-slate-400 truncate">${esc(meta)}</div>
         </div>
-        <span class="text-[10px] text-slate-400 flex-shrink-0">${new Date(item.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
-      </div>
-    `).join('');
+        <span class="text-[10px] text-slate-400 flex-shrink-0">${esc(when)}</span>
+      </div>`;
+    }).join('');
   } catch (e) {
     console.error('Erro ao carregar histórico:', e);
     container.innerHTML = '<p class="text-red-400 p-1">Não foi possível carregar o histórico.</p>';
@@ -340,18 +435,27 @@ async function clearSearchHistory() {
     await renderHistoryUI();
     toast('Histórico limpo.');
   } catch (e) {
-    showErr(e.message);
+    showErr(friendlyHistoryError(e.message));
   }
 }
 
-function loadSearchFromHistory(params) {
-  if (!params) return;
-  if (params.q) document.getElementById('videoQuery').value = params.q;
-  if (params.regionCode) document.getElementById('regionSelect').value = params.regionCode;
-  if (params.dateFilter) document.getElementById('dateSelect').value = params.dateFilter;
-  if (params.order) setOrder(params.order);
-  if (params.maxResults) setCount(params.maxResults);
-  doVideoSearch();
+function loadSearchFromHistory(item) {
+  if (!item) return;
+  if (item.search_type === 'comments') {
+    // Reabre as fontes na aba de comentários; a extração só roda quando o usuário clicar (gasta cota da API).
+    document.getElementById('videoInput').value = item.query || '';
+    onVideoInput();
+    switchTab('comments');
+    toast('Fontes carregadas. Clique em "Extrair Comentários".');
+    return;
+  }
+  switchTab('videos');
+  if (item.query) document.getElementById('videoQuery').value = item.query;
+  if (item.region) document.getElementById('regionSelect').value = item.region;
+  if (item.year) document.getElementById('dateSelect').value = item.year;
+  if (item.order_by) setOrder(item.order_by);
+  setCount(Math.max(10, Math.min(50, Number(item.total_results) || 20)));
+  doVideoSearch({ skipHistory: true }); // reabrir uma pesquisa não cria um novo registro duplicado
 }
 
 function onVideoInput() {
@@ -402,6 +506,7 @@ async function doSearch() {
   progList.innerHTML = '';
 
   allResults = [];
+  let succeeded = 0;
 
   for (let i = 0; i < urls.length; i++) {
     const url = urls[i];
@@ -424,6 +529,7 @@ async function doSearch() {
       if (!res.ok) throw new Error(data.error || 'Erro na requisição');
 
       allResults.push(...(data.comments || []));
+      succeeded++;
       itemEl.querySelector('span:last-child').className = 'font-bold text-green-600';
       itemEl.querySelector('span:last-child').textContent = `${data.comments?.length || 0} comentário(s)`;
     } catch (err) {
@@ -433,6 +539,9 @@ async function doSearch() {
   }
 
   renderComments();
+  if (currentUser && succeeded > 0) {
+    saveHistoryEntry({ query: urls.join('\n').slice(0, 2000), region: '-', year: '-', totalResults: allResults.length, searchType: 'comments' });
+  }
 }
 
 function renderComments() {
@@ -466,7 +575,8 @@ function renderComments() {
   `).join('');
 }
 
-async function doVideoSearch() {
+async function doVideoSearch(opts) {
+  const skipHistory = !!(opts && opts.skipHistory === true); // o clique no botão passa um Event, que é ignorado
   const q = document.getElementById('videoQuery').value.trim();
   if (!q) return showErr('Digite um termo para pesquisar vídeos.');
   hideErr();
@@ -491,7 +601,9 @@ async function doVideoSearch() {
     currentVideos = data.videos || [];
     currentQuery = q;
 
-    saveSearchToHistory({ q, regionCode, dateFilter, order: videoOrder, maxResults: videoCount }, currentVideos.length);
+    if (!skipHistory && currentUser) {
+      saveHistoryEntry({ query: q, region: regionCode, year: dateFilter, order: videoOrder, totalResults: currentVideos.length, searchType: 'videos' });
+    }
     renderVideos();
   } catch (err) {
     showErr(err.message);
@@ -538,6 +650,9 @@ function renderVideos() {
 // ============================
 // EXPORTAÇÃO DE RELATÓRIOS
 // ============================
+// Nomes de formas do PptxGenJS (equivalentes a pptx.ShapeType.*), usáveis fora das funções de exportação
+const SHAPE = { line: 'line', rect: 'rect', roundRect: 'roundRect' };
+
 const REPORT = {
   font: 'Aptos', navy: '0F172A', accent: 'DC2626', light: 'F8FAFC', white: 'FFFFFF', slate: '475569', border: 'E2E8F0'
 };
@@ -647,28 +762,28 @@ function exportVideosToExcel(videos, queryTerm) {
   const wc=XLSX.utils.aoa_to_sheet([['Canal','Visualizações no conjunto','Vídeos'],...m.topChannels.map(([channel,views])=>[channel,views,videos.filter(v=>(v.channel||'Canal não informado')===channel).length])]); styleSheetHeader(wc,1,0,2); wc['!cols']=[{wch:40},{wch:26},{wch:12}]; XLSX.utils.book_append_sheet(workbook,wc,'Canais');
   XLSX.writeFile(workbook,`Relatorio_Videos_${safeFileName(queryTerm)}_${Date.now()}.xlsx`); toast('Relatório Excel de vídeos exportado.');
 }
-function addPptHeader(slide,title,subtitle=''){slide.addText(title,{x:.55,y:.35,w:12.25,h:.45,fontFace:REPORT.font,fontSize:23,bold:true,color:REPORT.navy,margin:0});if(subtitle)slide.addText(subtitle,{x:.55,y:.84,w:12,h:.3,fontFace:REPORT.font,fontSize:9.5,color:REPORT.slate,margin:0});slide.addShape(pptx.ShapeType.line,{x:.55,y:1.22,w:12.15,h:0,line:{color:REPORT.border,pt:1}});}
-function addMetricCard(slide,x,y,w,label,value){slide.addShape(pptx.ShapeType.roundRect,{x,y,w,h:1,rectRadius:.08,fill:{color:REPORT.light},line:{color:REPORT.border,pt:1}});slide.addText(label,{x:x+.18,y:y+.16,w:w-.36,h:.25,fontFace:REPORT.font,fontSize:9,color:REPORT.slate,margin:0});slide.addText(String(value),{x:x+.18,y:y+.42,w:w-.36,h:.42,fontFace:REPORT.font,fontSize:20,bold:true,color:REPORT.navy,margin:0});}
-function addBarList(slide,title,entries,valueFormatter=fmtNum,xBase=.65){slide.addText(title,{x:xBase,y:1.55,w:5.2,h:.35,fontFace:REPORT.font,fontSize:14,bold:true,color:REPORT.navy,margin:0});const max=Math.max(...entries.map(e=>Number(e[1])||0),1);entries.slice(0,7).forEach(([label,value],i)=>{const y=2.02+i*.62,ratio=Math.max(.02,(Number(value)||0)/max);slide.addText(String(label).slice(0,42),{x:xBase,y,w:3.05,h:.26,fontFace:REPORT.font,fontSize:9,color:REPORT.slate,margin:0,fit:'shrink'});slide.addShape(pptx.ShapeType.roundRect,{x:xBase+3.1,y:y+.02,w:2,h:.18,rectRadius:.05,fill:{color:REPORT.border},line:{color:REPORT.border,transparency:100}});slide.addShape(pptx.ShapeType.roundRect,{x:xBase+3.1,y:y+.02,w:2*ratio,h:.18,rectRadius:.05,fill:{color:REPORT.accent},line:{color:REPORT.accent,transparency:100}});slide.addText(valueFormatter(value),{x:xBase+5.25,y:y-.02,w:.9,h:.24,fontFace:REPORT.font,fontSize:9,bold:true,color:REPORT.navy,margin:0,align:'right'});});}
+function addPptHeader(slide,title,subtitle=''){slide.addText(title,{x:.55,y:.35,w:12.25,h:.45,fontFace:REPORT.font,fontSize:23,bold:true,color:REPORT.navy,margin:0});if(subtitle)slide.addText(subtitle,{x:.55,y:.84,w:12,h:.3,fontFace:REPORT.font,fontSize:9.5,color:REPORT.slate,margin:0});slide.addShape(SHAPE.line,{x:.55,y:1.22,w:12.15,h:0,line:{color:REPORT.border,pt:1}});}
+function addMetricCard(slide,x,y,w,label,value){slide.addShape(SHAPE.roundRect,{x,y,w,h:1,rectRadius:.08,fill:{color:REPORT.light},line:{color:REPORT.border,pt:1}});slide.addText(label,{x:x+.18,y:y+.16,w:w-.36,h:.25,fontFace:REPORT.font,fontSize:9,color:REPORT.slate,margin:0});slide.addText(String(value),{x:x+.18,y:y+.42,w:w-.36,h:.42,fontFace:REPORT.font,fontSize:20,bold:true,color:REPORT.navy,margin:0});}
+function addBarList(slide,title,entries,valueFormatter=fmtNum,xBase=.65){slide.addText(title,{x:xBase,y:1.55,w:5.2,h:.35,fontFace:REPORT.font,fontSize:14,bold:true,color:REPORT.navy,margin:0});const max=Math.max(...entries.map(e=>Number(e[1])||0),1);entries.slice(0,7).forEach(([label,value],i)=>{const y=2.02+i*.62,ratio=Math.max(.02,(Number(value)||0)/max);slide.addText(String(label).slice(0,42),{x:xBase,y,w:3.05,h:.26,fontFace:REPORT.font,fontSize:9,color:REPORT.slate,margin:0,fit:'shrink'});slide.addShape(SHAPE.roundRect,{x:xBase+3.1,y:y+.02,w:2,h:.18,rectRadius:.05,fill:{color:REPORT.border},line:{color:REPORT.border,transparency:100}});slide.addShape(SHAPE.roundRect,{x:xBase+3.1,y:y+.02,w:2*ratio,h:.18,rectRadius:.05,fill:{color:REPORT.accent},line:{color:REPORT.accent,transparency:100}});slide.addText(valueFormatter(value),{x:xBase+5.25,y:y-.02,w:.9,h:.24,fontFace:REPORT.font,fontSize:9,bold:true,color:REPORT.navy,margin:0,align:'right'});});}
 function addFooter(slide,pageText){slide.addText('Análise YouTube',{x:.55,y:7.03,w:2,h:.2,fontFace:REPORT.font,fontSize:8,color:'94A3B8',margin:0});slide.addText(pageText,{x:11.5,y:7.03,w:1.2,h:.2,fontFace:REPORT.font,fontSize:8,color:'94A3B8',margin:0,align:'right'});}
 async function exportCommentsToPowerPoint(comments){
   if(!comments?.length)return showErr('Não há comentários para exportar.'); if(!window.PptxGenJS)return showErr('A biblioteca de PowerPoint não foi carregada. Recarregue a página.');
   const m=commentMetrics(comments),pptx=new PptxGenJS();pptx.layout='LAYOUT_WIDE';pptx.author='Análise YouTube';pptx.subject='Relatório analítico de comentários';pptx.title='Relatório Analítico de Comentários — YouTube';pptx.lang='pt-BR';const totalPages=4+Math.ceil(comments.length/8);let page=1;
-  let slide=pptx.addSlide();slide.background={color:REPORT.navy};slide.addText('RELATÓRIO ANALÍTICO',{x:.72,y:1.12,w:11.6,h:.45,fontFace:REPORT.font,fontSize:28,bold:true,color:REPORT.white,margin:0});slide.addText('Comentários de vídeos do YouTube',{x:.72,y:1.67,w:11.6,h:.45,fontFace:REPORT.font,fontSize:22,color:'E2E8F0',margin:0});slide.addText(`Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`,{x:.72,y:5.45,w:6.6,h:.3,fontFace:REPORT.font,fontSize:10,color:'CBD5E1',margin:0});slide.addShape(pptx.ShapeType.rect,{x:.72,y:6.15,w:2.4,h:.08,fill:{color:REPORT.accent},line:{color:REPORT.accent,transparency:100}});addFooter(slide,`${page++}/${totalPages}`);
+  let slide=pptx.addSlide();slide.background={color:REPORT.navy};slide.addText('RELATÓRIO ANALÍTICO',{x:.72,y:1.12,w:11.6,h:.45,fontFace:REPORT.font,fontSize:28,bold:true,color:REPORT.white,margin:0});slide.addText('Comentários de vídeos do YouTube',{x:.72,y:1.67,w:11.6,h:.45,fontFace:REPORT.font,fontSize:22,color:'E2E8F0',margin:0});slide.addText(`Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`,{x:.72,y:5.45,w:6.6,h:.3,fontFace:REPORT.font,fontSize:10,color:'CBD5E1',margin:0});slide.addShape(SHAPE.rect,{x:.72,y:6.15,w:2.4,h:.08,fill:{color:REPORT.accent},line:{color:REPORT.accent,transparency:100}});addFooter(slide,`${page++}/${totalPages}`);
   slide=pptx.addSlide();addPptHeader(slide,'Resumo executivo','Indicadores consolidados da coleta atual');addMetricCard(slide,.65,1.55,2.75,'Comentários',comments.length);addMetricCard(slide,3.55,1.55,2.75,'Curtidas somadas',fmtNum(m.totalLikes));addMetricCard(slide,6.45,1.55,2.75,'Autores únicos',m.uniqueAuthors);addMetricCard(slide,9.35,1.55,2.75,'Vídeos analisados',m.uniqueVideos);slide.addText(`A média é de ${m.avgLikes.toFixed(1)} curtidas por comentário. ${keywords.length?`Filtro aplicado: ${keywords.join(', ')}.`:'Nenhum filtro de palavras foi aplicado.'}`,{x:.65,y:3.42,w:11.3,h:.75,fontFace:REPORT.font,fontSize:12,color:REPORT.slate,margin:0,fit:'shrink'});addFooter(slide,`${page++}/${totalPages}`);
   slide=pptx.addSlide();addPptHeader(slide,'Onde está a concentração da conversa?','Autores e vídeos com maior volume de comentários no conjunto');addBarList(slide,'Top autores',m.topAuthors,v=>String(v),.65);addBarList(slide,'Top vídeos',m.topVideos,v=>String(v),6.7);addFooter(slide,`${page++}/${totalPages}`);
   slide=pptx.addSlide();addPptHeader(slide,'Metodologia e filtros','Contexto para interpretação do relatório');[['Palavras-chave',keywords.length?keywords.join(', '):'Nenhuma'],['Quantidade de comentários',String(comments.length)],['Vídeos de origem',String(m.uniqueVideos)],['Métrica de interação','Curtidas por comentário e distribuição do volume'],['Observação','A API do YouTube pode retornar somente parte dos comentários disponíveis para um vídeo.']].forEach(([label,value],i)=>{const y=1.62+i*.83;slide.addText(label,{x:.75,y,w:2.7,h:.25,fontFace:REPORT.font,fontSize:10,bold:true,color:REPORT.navy,margin:0});slide.addText(value,{x:3.25,y,w:8.9,h:.45,fontFace:REPORT.font,fontSize:11,color:REPORT.slate,margin:0,fit:'shrink'});});addFooter(slide,`${page++}/${totalPages}`);
-  for(let start=0;start<comments.length;start+=8){slide=pptx.addSlide();addPptHeader(slide,'Detalhamento dos comentários',`Registros ${start+1}–${Math.min(start+8,comments.length)} de ${comments.length}`);comments.slice(start,start+8).forEach((c,idx)=>{const y=1.48+idx*.63;slide.addShape(pptx.ShapeType.roundRect,{x:.58,y:y-.04,w:12.15,h:.55,rectRadius:.04,fill:{color:idx%2?REPORT.white:REPORT.light},line:{color:REPORT.border,pt:.5}});slide.addText(`${start+idx+1}. ${c.author||'Anônimo'}`,{x:.75,y,w:2.05,h:.2,fontFace:REPORT.font,fontSize:8.5,bold:true,color:REPORT.navy,margin:0,fit:'shrink'});slide.addText(String(c.text||'').slice(0,135),{x:2.9,y:y-.01,w:6.2,h:.34,fontFace:REPORT.font,fontSize:8.5,color:REPORT.slate,margin:0,fit:'shrink'});slide.addText(`${c.likes||0} curtidas`,{x:9.25,y,w:1,h:.2,fontFace:REPORT.font,fontSize:8.5,bold:true,color:REPORT.navy,margin:0,align:'right'});slide.addText(fmtDate(c.publishedAt),{x:10.35,y,w:1.05,h:.2,fontFace:REPORT.font,fontSize:8,color:REPORT.slate,margin:0,align:'right'});});addFooter(slide,`${page++}/${totalPages}`);}
+  for(let start=0;start<comments.length;start+=8){slide=pptx.addSlide();addPptHeader(slide,'Detalhamento dos comentários',`Registros ${start+1}–${Math.min(start+8,comments.length)} de ${comments.length}`);comments.slice(start,start+8).forEach((c,idx)=>{const y=1.48+idx*.63;slide.addShape(SHAPE.roundRect,{x:.58,y:y-.04,w:12.15,h:.55,rectRadius:.04,fill:{color:idx%2?REPORT.white:REPORT.light},line:{color:REPORT.border,pt:.5}});slide.addText(`${start+idx+1}. ${c.author||'Anônimo'}`,{x:.75,y,w:2.05,h:.2,fontFace:REPORT.font,fontSize:8.5,bold:true,color:REPORT.navy,margin:0,fit:'shrink'});slide.addText(String(c.text||'').slice(0,135),{x:2.9,y:y-.01,w:6.2,h:.34,fontFace:REPORT.font,fontSize:8.5,color:REPORT.slate,margin:0,fit:'shrink'});slide.addText(`${c.likes||0} curtidas`,{x:9.25,y,w:1,h:.2,fontFace:REPORT.font,fontSize:8.5,bold:true,color:REPORT.navy,margin:0,align:'right'});slide.addText(fmtDate(c.publishedAt),{x:10.35,y,w:1.05,h:.2,fontFace:REPORT.font,fontSize:8,color:REPORT.slate,margin:0,align:'right'});});addFooter(slide,`${page++}/${totalPages}`);}
   await pptx.writeFile({fileName:`Relatorio_Comentarios_${Date.now()}.pptx`});toast('Relatório PowerPoint de comentários exportado.');
 }
 async function exportVideosToPowerPoint(videos,queryTerm){
   if(!videos?.length)return showErr('Nenhum vídeo disponível para exportar.');if(!window.PptxGenJS)return showErr('A biblioteca de PowerPoint não foi carregada. Recarregue a página.');
   const m=videoMetrics(videos),pptx=new PptxGenJS();pptx.layout='LAYOUT_WIDE';pptx.author='Análise YouTube';pptx.subject='Relatório de pesquisa de vídeos';pptx.title=`Pesquisa de Vídeos — ${queryTerm||'YouTube'}`;pptx.lang='pt-BR';const totalPages=4+Math.ceil(videos.length/10);let page=1;
-  let slide=pptx.addSlide();slide.background={color:REPORT.navy};slide.addText('RELATÓRIO DE PESQUISA',{x:.72,y:1.12,w:11.6,h:.45,fontFace:REPORT.font,fontSize:28,bold:true,color:REPORT.white,margin:0});slide.addText(queryTerm||'Pesquisa YouTube',{x:.72,y:1.67,w:11.6,h:.45,fontFace:REPORT.font,fontSize:22,color:'E2E8F0',margin:0});slide.addText(`Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`,{x:.72,y:5.45,w:6.6,h:.3,fontFace:REPORT.font,fontSize:10,color:'CBD5E1',margin:0});slide.addShape(pptx.ShapeType.rect,{x:.72,y:6.15,w:2.4,h:.08,fill:{color:REPORT.accent},line:{color:REPORT.accent,transparency:100}});addFooter(slide,`${page++}/${totalPages}`);
+  let slide=pptx.addSlide();slide.background={color:REPORT.navy};slide.addText('RELATÓRIO DE PESQUISA',{x:.72,y:1.12,w:11.6,h:.45,fontFace:REPORT.font,fontSize:28,bold:true,color:REPORT.white,margin:0});slide.addText(queryTerm||'Pesquisa YouTube',{x:.72,y:1.67,w:11.6,h:.45,fontFace:REPORT.font,fontSize:22,color:'E2E8F0',margin:0});slide.addText(`Emissão: ${new Date().toLocaleDateString('pt-BR')} às ${new Date().toLocaleTimeString('pt-BR')}`,{x:.72,y:5.45,w:6.6,h:.3,fontFace:REPORT.font,fontSize:10,color:'CBD5E1',margin:0});slide.addShape(SHAPE.rect,{x:.72,y:6.15,w:2.4,h:.08,fill:{color:REPORT.accent},line:{color:REPORT.accent,transparency:100}});addFooter(slide,`${page++}/${totalPages}`);
   slide=pptx.addSlide();addPptHeader(slide,'Resumo da pesquisa',`${videos.length} vídeos no conjunto atual`);addMetricCard(slide,.65,1.55,2.75,'Vídeos',videos.length);addMetricCard(slide,3.55,1.55,2.75,'Visualizações',fmtNum(m.totalViews));addMetricCard(slide,6.45,1.55,2.75,'Curtidas',fmtNum(m.totalLikes));addMetricCard(slide,9.35,1.55,2.75,'Comentários',fmtNum(m.totalComments));slide.addText(`Média de visualizações: ${fmtNum(Math.round(m.avgViews))}. Taxa média de engajamento: ${m.avgEngagement.toFixed(2)}%.`,{x:.65,y:3,w:11.2,h:.45,fontFace:REPORT.font,fontSize:13,color:REPORT.slate,margin:0});addFooter(slide,`${page++}/${totalPages}`);
   slide=pptx.addSlide();addPptHeader(slide,'Alcance por canal','Soma das visualizações dos vídeos retornados');addBarList(slide,'Top canais',m.topChannels,v=>fmtNum(v),.65);addFooter(slide,`${page++}/${totalPages}`);
   slide=pptx.addSlide();addPptHeader(slide,'Critérios da pesquisa','Parâmetros utilizados no conjunto atual');[['Termo',queryTerm||'N/A'],['Ordenação',videoOrder==='date'?'Mais recentes':'Visualizações'],['Região',document.getElementById('regionSelect')?.value||'BR'],['Ano',document.getElementById('dateSelect')?.value||'ALL'],['Quantidade solicitada',String(videoCount)]].forEach(([label,value],i)=>{const y=1.62+i*.83;slide.addText(label,{x:.75,y,w:2.7,h:.25,fontFace:REPORT.font,fontSize:10,bold:true,color:REPORT.navy,margin:0});slide.addText(value,{x:3.25,y,w:8.9,h:.35,fontFace:REPORT.font,fontSize:11,color:REPORT.slate,margin:0,fit:'shrink'});});addFooter(slide,`${page++}/${totalPages}`);
-  for(let start=0;start<videos.length;start+=10){slide=pptx.addSlide();addPptHeader(slide,'Detalhamento dos vídeos',`Registros ${start+1}–${Math.min(start+10,videos.length)} de ${videos.length}`);const headers=[['#',.65,.35],['Título',1.1,4.35],['Canal',5.55,2.15],['Views',7.8,1.05],['Likes',8.9,1],['Com.',9.95,.85],['Data',10.85,1.15]];headers.forEach(([label,x,w])=>slide.addText(label,{x,y:1.5,w,h:.23,fontFace:REPORT.font,fontSize:8.5,bold:true,color:REPORT.navy,margin:0}));videos.slice(start,start+10).forEach((v,idx)=>{const y=1.82+idx*.48;slide.addText(String(start+idx+1),{x:.65,y,w:.35,h:.2,fontFace:REPORT.font,fontSize:8,color:REPORT.slate,margin:0});slide.addText(String(v.title||'').slice(0,68),{x:1.1,y,w:4.35,h:.2,fontFace:REPORT.font,fontSize:8,color:REPORT.navy,margin:0,fit:'shrink'});slide.addText(String(v.channel||'').slice(0,30),{x:5.55,y,w:2.15,h:.2,fontFace:REPORT.font,fontSize:8,color:REPORT.slate,margin:0,fit:'shrink'});slide.addText(fmtNum(v.views||0),{x:7.8,y,w:1.05,h:.2,fontFace:REPORT.font,fontSize:8,bold:true,color:REPORT.navy,margin:0,align:'right'});slide.addText(fmtNum(v.likes||0),{x:8.9,y,w:1,h:.2,fontFace:REPORT.font,fontSize:8,color:REPORT.slate,margin:0,align:'right'});slide.addText(fmtNum(v.comments||0),{x:9.95,y,w:.85,h:.2,fontFace:REPORT.font,fontSize:8,color:REPORT.slate,margin:0,align:'right'});slide.addText(fmtDate(v.publishedAt),{x:10.85,y,w:1.15,h:.2,fontFace:REPORT.font,fontSize:8,color:REPORT.slate,margin:0,align:'right'});slide.addShape(pptx.ShapeType.line,{x:.65,y:y+.29,w:11.35,h:0,line:{color:REPORT.border,pt:.6}});});addFooter(slide,`${page++}/${totalPages}`);}
+  for(let start=0;start<videos.length;start+=10){slide=pptx.addSlide();addPptHeader(slide,'Detalhamento dos vídeos',`Registros ${start+1}–${Math.min(start+10,videos.length)} de ${videos.length}`);const headers=[['#',.65,.35],['Título',1.1,4.35],['Canal',5.55,2.15],['Views',7.8,1.05],['Likes',8.9,1],['Com.',9.95,.85],['Data',10.85,1.15]];headers.forEach(([label,x,w])=>slide.addText(label,{x,y:1.5,w,h:.23,fontFace:REPORT.font,fontSize:8.5,bold:true,color:REPORT.navy,margin:0}));videos.slice(start,start+10).forEach((v,idx)=>{const y=1.82+idx*.48;slide.addText(String(start+idx+1),{x:.65,y,w:.35,h:.2,fontFace:REPORT.font,fontSize:8,color:REPORT.slate,margin:0});slide.addText(String(v.title||'').slice(0,68),{x:1.1,y,w:4.35,h:.2,fontFace:REPORT.font,fontSize:8,color:REPORT.navy,margin:0,fit:'shrink'});slide.addText(String(v.channel||'').slice(0,30),{x:5.55,y,w:2.15,h:.2,fontFace:REPORT.font,fontSize:8,color:REPORT.slate,margin:0,fit:'shrink'});slide.addText(fmtNum(v.views||0),{x:7.8,y,w:1.05,h:.2,fontFace:REPORT.font,fontSize:8,bold:true,color:REPORT.navy,margin:0,align:'right'});slide.addText(fmtNum(v.likes||0),{x:8.9,y,w:1,h:.2,fontFace:REPORT.font,fontSize:8,color:REPORT.slate,margin:0,align:'right'});slide.addText(fmtNum(v.comments||0),{x:9.95,y,w:.85,h:.2,fontFace:REPORT.font,fontSize:8,color:REPORT.slate,margin:0,align:'right'});slide.addText(fmtDate(v.publishedAt),{x:10.85,y,w:1.15,h:.2,fontFace:REPORT.font,fontSize:8,color:REPORT.slate,margin:0,align:'right'});slide.addShape(SHAPE.line,{x:.65,y:y+.29,w:11.35,h:0,line:{color:REPORT.border,pt:.6}});});addFooter(slide,`${page++}/${totalPages}`);}
   await pptx.writeFile({fileName:`Relatorio_Videos_${safeFileName(queryTerm)}_${Date.now()}.pptx`});toast('Relatório PowerPoint de vídeos exportado.');
 }
 async function doExport(){
