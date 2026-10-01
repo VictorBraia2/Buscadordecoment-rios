@@ -24,7 +24,10 @@ let keywords = [];
 let authLoading = false;
 let currentUser = null;      // usuário logado (null = deslogado)
 let historyUserId = null;    // evita recarregar o histórico duas vezes para o mesmo usuário
-let historyItems = [];       // itens do histórico atualmente exibidos
+// Estado do histórico (vem da API /api/history)
+const historyState = { items: [], total: 0, videos: 0, comments: 0, error: null, loaded: false };
+let historyFilter = 'all';   // all | videos | comments (página de perfil)
+let historyTerm = '';        // filtro de texto da página de perfil
 
 const AVATAR_FALLBACK = '/assets/img/avatar-placeholder.svg';
 const GOOGLE_BUTTON_HTML = `<svg class="w-4 h-4" viewBox="0 0 24 24">
@@ -74,8 +77,9 @@ function setAuthView(user) {
       avatarEl.onerror = () => { avatarEl.onerror = null; avatarEl.src = AVATAR_FALLBACK; };
       avatarEl.src = meta.avatar_url || meta.picture || AVATAR_FALLBACK;
       const created = user.created_at ? new Date(user.created_at) : null;
-      document.getElementById('profileCreatedAt').textContent =
-        created && !isNaN(created) ? created.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+      const createdLabel = created && !isNaN(created) ? created.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+      document.getElementById('profileCreatedAt').textContent = createdLabel;
+      fillProfilePage(user, createdLabel);
     } catch (e) {
       console.warn('Erro ao preencher o perfil:', e);
     }
@@ -85,14 +89,33 @@ function setAuthView(user) {
     loggedOut.classList.remove('hidden');
     resetLoginButton();
     historyUserId = null;
-    historyItems = [];
+    Object.assign(historyState, { items: [], total: 0, videos: 0, comments: 0, error: null, loaded: false });
+    if (document.getElementById('panelProfile')?.style.display === 'block') switchTab('comments');
     setProfileSearchCount(0);
     const created = document.getElementById('profileCreatedAt');
     if (created) created.textContent = '—';
     const list = document.getElementById('historyListContainer');
     if (list) list.innerHTML = '';
   }
+  document.getElementById('tabProfile')?.classList.toggle('hidden', !user);
   updateHistoryVisibility();
+}
+
+function fillProfilePage(user, createdLabel) {
+  const meta = user.user_metadata || {};
+  const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+  set('profileName', meta.full_name || meta.name || (user.email ? user.email.split('@')[0] : 'Usuário'));
+  set('profileEmail', user.email || '');
+  set('profileSince', createdLabel);
+  const last = user.last_sign_in_at ? new Date(user.last_sign_in_at) : null;
+  set('profileLastLogin', last && !isNaN(last) ? last.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
+  const provider = (user.app_metadata && user.app_metadata.provider) || 'google';
+  set('profileProvider', provider === 'google' ? 'Conta Google' : `Conta ${provider}`);
+  const img = document.getElementById('profileAvatar');
+  if (img) {
+    img.onerror = () => { img.onerror = null; img.src = AVATAR_FALLBACK; };
+    img.src = meta.avatar_url || meta.picture || AVATAR_FALLBACK;
+  }
 }
 
 async function loginWithGoogle() {
@@ -159,7 +182,7 @@ function loadHistoryOnce(user) {
   if (!user || historyUserId === user.id) return;
   historyUserId = user.id;
   // Fora do callback do Supabase Auth, para evitar reentrância.
-  setTimeout(() => renderHistoryUI(), 0);
+  setTimeout(() => refreshHistory(), 0);
 }
 
 async function initializeAuth() {
@@ -235,12 +258,30 @@ function bindUIEvents() {
     if (button) removeKw(button.dataset.removeKeyword || '');
   });
 
-  const historyList = document.getElementById('historyListContainer');
-  historyList?.addEventListener('click', event => {
-    const item = event.target.closest('[data-history-index]');
-    if (!item) return;
-    const entry = historyItems[Number(item.dataset.historyIndex)];
-    if (entry) loadSearchFromHistory(entry);
+  // Histórico: lista da barra lateral
+  document.getElementById('historyListContainer')?.addEventListener('click', event => {
+    const row = event.target.closest('[data-history-id]');
+    if (row) loadSearchFromHistory(findHistoryItem(row.dataset.historyId));
+  });
+
+  // Página de perfil
+  on('btnOpenProfile', 'click', openProfile);
+  on('btnOpenProfile2', 'click', openProfile);
+  on('btnOpenProfile', 'keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openProfile(); } });
+  on('tabProfile', 'click', openProfile);
+  on('btnLogoutProfile', 'click', logout);
+  on('btnClearHistoryProfile', 'click', clearSearchHistory);
+  on('btnRetryHistory', 'click', refreshHistory);
+  const setFilter = f => { historyFilter = f; renderProfilePage(); };
+  on('histFilterAll', 'click', () => setFilter('all'));
+  on('histFilterVideos', 'click', () => setFilter('videos'));
+  on('histFilterComments', 'click', () => setFilter('comments'));
+  on('histSearch', 'input', event => { historyTerm = event.target.value; renderProfilePage(); });
+  document.getElementById('profileHistoryList')?.addEventListener('click', event => {
+    const del = event.target.closest('[data-history-delete]');
+    if (del) return deleteHistoryItem(del.dataset.historyDelete);
+    const open = event.target.closest('[data-history-open]');
+    if (open) loadSearchFromHistory(findHistoryItem(open.dataset.historyOpen));
   });
 
   const videoArea = document.getElementById('videoResArea');
@@ -260,26 +301,42 @@ window.addEventListener('pageshow', event => {
   if (event.persisted && !currentUser) resetLoginButton();
 });
 
+const TAB_ACTIVE = ['border-brand-500', 'text-brand-600'];
+const TAB_IDLE = ['border-transparent', 'text-slate-500', 'hover:text-slate-700', 'hover:border-slate-300'];
+
+function styleTab(id, active) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.remove(...(active ? TAB_IDLE : TAB_ACTIVE));
+  el.classList.add(...(active ? TAB_ACTIVE : TAB_IDLE));
+}
+
 function switchTab(tab) {
+  if (tab === 'profile' && !currentUser) tab = 'comments'; // a página de perfil só existe para quem está logado
+  const isP = (tab === 'profile');
   const isC = (tab === 'comments');
-  
-  document.getElementById('tabComments').className = `pb-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${isC ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`;
-  document.getElementById('tabVideos').className = `pb-3 text-sm font-medium border-b-2 transition-colors cursor-pointer ${!isC ? 'border-brand-500 text-brand-600' : 'border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300'}`;
-  
+
+  styleTab('tabComments', isC);
+  styleTab('tabVideos', tab === 'videos');
+  styleTab('tabProfile', isP);
+
   document.getElementById('panelComments').style.display = isC ? 'block' : 'none';
-  document.getElementById('panelVideos').style.display = !isC ? 'block' : 'none';
-  
+  document.getElementById('panelVideos').style.display = tab === 'videos' ? 'block' : 'none';
+  document.getElementById('panelProfile').style.display = isP ? 'block' : 'none';
+
+  if (isP) { renderProfilePage(); return; } // a barra lateral permanece como estava
+
   document.getElementById('cardVideosInput').style.display = isC ? 'block' : 'none';
   document.getElementById('cardKeywords').style.display = isC ? 'block' : 'none';
   document.getElementById('cardDisplayCols').style.display = isC ? 'block' : 'none';
   document.getElementById('cardExportOpts').style.display = isC ? 'block' : 'none';
-  
+
   document.getElementById('cardVideoSearch').style.display = isC ? 'none' : 'block';
   document.getElementById('cardVideoFilters').style.display = isC ? 'none' : 'block';
-  
+
   document.getElementById('btnSearch').style.display = isC ? 'flex' : 'none';
   document.getElementById('btnVideoSearch').style.display = isC ? 'none' : 'flex';
-  
+
   if (!isC) {
     document.getElementById('btnExport').classList.add('hidden');
     document.getElementById('btnClear').classList.add('hidden');
@@ -342,29 +399,69 @@ function sendToComments(url) {
   toast('Adicionado à fila de extração!');
 }
 
-function friendlyHistoryError(message) {
-  return /search_history|schema cache|relation .* does not exist/i.test(message || '')
-    ? 'A tabela search_history não está disponível no Supabase. Execute o arquivo supabase/schema.sql no SQL Editor.'
-    : (message || 'Erro ao acessar o histórico.');
+// HISTÓRICO (salvo na conta do usuário via /api/history)
+async function historyApi(method = 'GET', { query = '', body = null } = {}) {
+  const token = await getAuthToken();
+  if (!token) throw Object.assign(new Error('Sessão expirada. Faça login novamente.'), { kind: 'auth' });
+  const res = await fetch('/api/history' + query, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const payload = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw Object.assign(new Error(payload.error || `Erro ${res.status} ao acessar o histórico.`), {
+      kind: payload.kind || 'unknown', detail: payload.detail || ''
+    });
+  }
+  return payload;
+}
+
+function explainHistoryError(e) {
+  switch (e && e.kind) {
+    case 'missing_table':
+      return 'A tabela search_history ainda não existe no Supabase. Abra o SQL Editor do Supabase e execute o arquivo supabase/schema.sql.';
+    case 'missing_column':
+      return 'A tabela search_history existe, mas está sem a coluna search_type. Execute o arquivo supabase/schema.sql novamente (ele adiciona a coluna).';
+    case 'permission':
+      return 'O Supabase negou o acesso à tabela search_history (permissão/RLS). Execute o arquivo supabase/schema.sql novamente para recriar as políticas.';
+    default:
+      return (e && e.message) || 'Erro ao acessar o histórico.';
+  }
 }
 
 // Salva uma pesquisa no histórico do perfil (só quando há usuário logado).
 async function saveHistoryEntry({ query, region = 'BR', year = 'ALL', order = 'relevance', totalResults = 0, searchType = 'videos' }) {
   try {
-    const token = await getAuthToken();
-    if (!token) return;
-    const res = await fetch('/api/history', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-      body: JSON.stringify({ query, region, year, order, totalResults, searchType })
-    });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(payload.error || 'Não foi possível salvar o histórico.');
-    await renderHistoryUI();
+    await historyApi('POST', { body: { query, region, year, order, totalResults, searchType } });
+    await refreshHistory();
   } catch (e) {
     console.error('Erro ao salvar histórico:', e);
-    showErr(friendlyHistoryError(e.message));
+    historyState.error = e;
+    renderHistoryUI();
+    renderProfilePage();
+    showErr(explainHistoryError(e));
   }
+}
+
+async function refreshHistory() {
+  if (!currentUser) return;
+  try {
+    const payload = await historyApi('GET', { query: '?limit=100' });
+    historyState.items = Array.isArray(payload) ? payload : (payload.items || []);
+    historyState.total = Array.isArray(payload) ? payload.length : (Number(payload.total) || historyState.items.length);
+    historyState.comments = Number(payload.comments) || historyState.items.filter(i => i.search_type === 'comments').length;
+    historyState.videos = Number.isFinite(Number(payload.videos)) && payload.videos != null
+      ? Number(payload.videos) : Math.max(0, historyState.total - historyState.comments);
+    historyState.error = null;
+  } catch (e) {
+    console.error('Erro ao carregar histórico:', e);
+    historyState.error = e;
+  }
+  historyState.loaded = true;
+  setProfileSearchCount(historyState.total);
+  renderHistoryUI();
+  renderProfilePage();
 }
 
 function shortenSource(value) {
@@ -373,70 +470,148 @@ function shortenSource(value) {
   return id ? `youtu.be/${id[1]}` : (v.length > 34 ? v.slice(0, 34) + '…' : v);
 }
 
-async function renderHistoryUI() {
+function describeHistoryItem(item) {
+  const isComments = item.search_type === 'comments';
+  if (isComments) {
+    const urls = String(item.query || '').split('\n').map(u => u.trim()).filter(Boolean);
+    return {
+      isComments,
+      title: shortenSource(urls[0]) + (urls.length > 1 ? ` (+${urls.length - 1})` : ''),
+      meta: `${Number(item.total_results) || 0} comentário(s) extraído(s)`
+    };
+  }
+  const order = item.order_by === 'date' ? 'mais recentes' : 'relevância';
+  return {
+    isComments,
+    title: item.query,
+    meta: `${item.region} • ${item.year === 'ALL' ? 'todos os anos' : item.year} • ${order} • ${Number(item.total_results) || 0} vídeo(s)`
+  };
+}
+
+// Lista compacta da barra lateral
+function renderHistoryUI() {
   const container = document.getElementById('historyListContainer');
   if (!container) return;
-  try {
-    const token = await getAuthToken();
-    if (!token) {
-      container.innerHTML = '<p class="text-slate-400 p-1">Faça login para salvar o histórico.</p>';
-      return;
-    }
-    const res = await fetch('/api/history', { headers: { 'Authorization': `Bearer ${token}` } });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      container.innerHTML = `<p class="text-red-400 p-1">${esc(friendlyHistoryError(payload.error))}</p>`;
-      return;
-    }
-    // A API devolve { items, total }; aceita também o formato antigo (array puro).
-    const items = Array.isArray(payload) ? payload : (payload.items || []);
-    const total = Array.isArray(payload) ? items.length : (Number(payload.total) || items.length);
-    historyItems = items;
-    setProfileSearchCount(total);
-
-    if (!items.length) {
-      container.innerHTML = '<p class="text-slate-400 p-1">Nenhuma pesquisa registrada ainda.</p>';
-      return;
-    }
-    container.innerHTML = items.map((item, idx) => {
-      const isComments = item.search_type === 'comments';
-      const when = new Date(item.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-      let title, meta;
-      if (isComments) {
-        const urls = String(item.query || '').split('\n').map(u => u.trim()).filter(Boolean);
-        title = shortenSource(urls[0]) + (urls.length > 1 ? ` (+${urls.length - 1})` : '');
-        meta = `Comentários • ${Number(item.total_results) || 0} extraído(s)`;
-      } else {
-        title = item.query;
-        meta = `Vídeos • ${item.region} • ${item.year} • ${Number(item.total_results) || 0} vídeo(s)`;
-      }
-      return `
-      <div class="history-item p-2 hover:bg-slate-100 rounded-lg border border-slate-100 transition-colors cursor-pointer flex justify-between items-center gap-2" data-history-index="${idx}" title="Abrir esta pesquisa novamente">
+  if (historyState.error) {
+    container.innerHTML = `<p class="text-red-500 p-1">${esc(explainHistoryError(historyState.error))}</p>`;
+    return;
+  }
+  if (!historyState.items.length) {
+    container.innerHTML = '<p class="text-slate-400 p-1">Nenhuma pesquisa registrada ainda.</p>';
+    return;
+  }
+  container.innerHTML = historyState.items.slice(0, 15).map(item => {
+    const d = describeHistoryItem(item);
+    const when = new Date(item.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    return `
+      <div class="history-item p-2 hover:bg-slate-100 rounded-lg border border-slate-100 transition-colors cursor-pointer flex justify-between items-center gap-2" data-history-id="${esc(item.id)}" title="Abrir esta pesquisa novamente">
         <div class="truncate">
-          <div class="font-semibold text-slate-800 truncate">${esc(title)}</div>
-          <div class="text-[10px] text-slate-400 truncate">${esc(meta)}</div>
+          <div class="font-semibold text-slate-800 truncate">${esc(d.title)}</div>
+          <div class="text-[10px] text-slate-400 truncate">${d.isComments ? 'Comentários' : 'Vídeos'} • ${esc(d.meta)}</div>
         </div>
         <span class="text-[10px] text-slate-400 flex-shrink-0">${esc(when)}</span>
       </div>`;
-    }).join('');
-  } catch (e) {
-    console.error('Erro ao carregar histórico:', e);
-    container.innerHTML = '<p class="text-red-400 p-1">Não foi possível carregar o histórico.</p>';
+  }).join('');
+}
+
+// Página de perfil: estatísticas + histórico completo com filtros
+function renderProfilePage() {
+  const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+  const list = document.getElementById('profileHistoryList');
+  const errBox = document.getElementById('profileHistoryError');
+  if (!list || !errBox) return;
+
+  set('statTotal', historyState.total);
+  set('statVideos', historyState.videos);
+  set('statComments', historyState.comments);
+  const latest = historyState.items[0];
+  set('statLast', latest ? new Date(latest.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
+
+  ['All', 'Videos', 'Comments'].forEach(name => {
+    const btn = document.getElementById('histFilter' + name);
+    if (!btn) return;
+    const active = historyFilter === name.toLowerCase();
+    btn.classList.toggle('bg-brand-600', active);
+    btn.classList.toggle('text-white', active);
+    btn.classList.toggle('bg-white', !active);
+    btn.classList.toggle('text-slate-600', !active);
+  });
+
+  if (historyState.error) {
+    errBox.classList.remove('hidden');
+    set('profileHistoryErrorMsg', explainHistoryError(historyState.error));
+    set('profileHistoryErrorDetail', historyState.error.detail ? `Detalhe técnico: ${historyState.error.detail}` : '');
+    list.innerHTML = '';
+    return;
   }
+  errBox.classList.add('hidden');
+
+  if (!historyState.loaded) {
+    list.innerHTML = '<p class="p-6 text-sm text-slate-400">Carregando histórico...</p>';
+    return;
+  }
+
+  const term = historyTerm.trim().toLowerCase();
+  const rows = historyState.items.filter(item => {
+    if (historyFilter === 'videos' && item.search_type === 'comments') return false;
+    if (historyFilter === 'comments' && item.search_type !== 'comments') return false;
+    return !term || String(item.query || '').toLowerCase().includes(term);
+  });
+
+  if (!rows.length) {
+    list.innerHTML = `<p class="p-8 text-sm text-slate-400 text-center">${historyState.items.length ? 'Nenhum resultado para esse filtro.' : 'Você ainda não fez nenhuma pesquisa. Elas aparecerão aqui automaticamente.'}</p>`;
+    return;
+  }
+
+  list.innerHTML = rows.map(item => {
+    const d = describeHistoryItem(item);
+    const when = new Date(item.created_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+    const badge = d.isComments
+      ? '<span class="inline-block bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full text-[10px] font-semibold">Comentários</span>'
+      : '<span class="inline-block bg-brand-100 text-brand-700 px-2 py-0.5 rounded-full text-[10px] font-semibold">Vídeos</span>';
+    return `
+      <div class="p-4 flex items-center gap-4 hover:bg-slate-50 transition-colors" data-history-row="${esc(item.id)}">
+        <div class="min-w-0 flex-1 space-y-1">
+          <div class="flex items-center gap-2">${badge}<span class="text-[11px] text-slate-400">${esc(when)}</span></div>
+          <p class="text-sm font-semibold text-slate-800 truncate">${esc(d.title)}</p>
+          <p class="text-xs text-slate-500 truncate">${esc(d.meta)}</p>
+        </div>
+        <button type="button" data-history-open="${esc(item.id)}" class="text-xs font-semibold text-brand-600 hover:text-brand-700 border border-brand-200 hover:bg-brand-50 rounded-lg px-3 py-1.5 cursor-pointer">Abrir</button>
+        <button type="button" data-history-delete="${esc(item.id)}" title="Excluir do histórico" class="text-xs text-slate-400 hover:text-red-500 px-2 py-1.5 cursor-pointer">Excluir</button>
+      </div>`;
+  }).join('');
+}
+
+function openProfile() {
+  if (!currentUser) return;
+  switchTab('profile');
+  refreshHistory();
 }
 
 async function clearSearchHistory() {
+  if (!historyState.total && !historyState.items.length) return toast('O histórico já está vazio.');
+  if (!window.confirm('Apagar todo o histórico de pesquisas da sua conta? Essa ação não pode ser desfeita.')) return;
   try {
-    const token = await getAuthToken();
-    if (!token) return;
-    const res = await fetch('/api/history', { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-    const payload = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(payload.error || 'Não foi possível limpar o histórico.');
-    await renderHistoryUI();
+    await historyApi('DELETE');
+    await refreshHistory();
     toast('Histórico limpo.');
   } catch (e) {
-    showErr(friendlyHistoryError(e.message));
+    showErr(explainHistoryError(e));
   }
+}
+
+async function deleteHistoryItem(id) {
+  try {
+    await historyApi('DELETE', { query: `?id=${encodeURIComponent(id)}` });
+    await refreshHistory();
+    toast('Item removido do histórico.');
+  } catch (e) {
+    showErr(explainHistoryError(e));
+  }
+}
+
+function findHistoryItem(id) {
+  return historyState.items.find(i => String(i.id) === String(id));
 }
 
 function loadSearchFromHistory(item) {
