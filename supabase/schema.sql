@@ -195,3 +195,6 @@ to authenticated;
 grant select, insert, delete
 on public.search_history
 to authenticated;
+
+-- Faz a API do Supabase enxergar imediatamente a tabela/coluna recém-criadas
+notify pgrst, 'reload schema';
