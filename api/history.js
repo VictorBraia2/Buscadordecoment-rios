@@ -31,15 +31,15 @@ export default async function handler(req, res) {
   const table = sb.from('search_history');
 
   if (req.method === 'GET') {
-    const { data, error } = await table
-      .select('id, query, region, year, order_by, total_results, created_at')
+    const { data, error, count } = await table
+      .select('id, query, region, year, order_by, total_results, search_type, created_at', { count: 'exact' })
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(10);
+      .limit(15);
 
     if (error) {
       console.error('Erro ao consultar search_history:', error);
-      const missingTable = /search_history|relation .* does not exist|schema cache/i.test(error.message || '');
+      const missingTable = /search_history|search_type|relation .* does not exist|schema cache/i.test(error.message || '');
       return res.status(500).json({
         error: missingTable
           ? 'A tabela search_history ainda não foi criada no Supabase. Execute supabase/schema.sql no SQL Editor.'
@@ -47,15 +47,16 @@ export default async function handler(req, res) {
       });
     }
 
-    return res.status(200).json(data || []);
+    return res.status(200).json({ items: data || [], total: count ?? (data || []).length });
   }
 
   if (req.method === 'POST') {
     const body = req.body || {};
-    const query = String(body.query || '').trim();
+    const query = String(body.query || '').trim().slice(0, 2000);
     const region = String(body.region || 'BR').trim().slice(0, 10);
     const year = String(body.year || 'ALL').trim().slice(0, 10);
     const order = body.order === 'date' ? 'date' : 'relevance';
+    const searchType = body.searchType === 'comments' ? 'comments' : 'videos';
     const totalResults = Math.max(0, Math.min(10000, Number.parseInt(body.totalResults, 10) || 0));
 
     if (!query) return res.status(400).json({ error: 'O termo da pesquisa é obrigatório.' });
@@ -66,12 +67,13 @@ export default async function handler(req, res) {
       region,
       year,
       order_by: order,
-      total_results: totalResults
-    }]).select('id, query, region, year, order_by, total_results, created_at').single();
+      total_results: totalResults,
+      search_type: searchType
+    }]).select('id, query, region, year, order_by, total_results, search_type, created_at').single();
 
     if (error) {
       console.error('Erro ao inserir search_history:', error);
-      const missingTable = /search_history|relation .* does not exist|schema cache/i.test(error.message || '');
+      const missingTable = /search_history|search_type|relation .* does not exist|schema cache/i.test(error.message || '');
       return res.status(500).json({
         error: missingTable
           ? 'A tabela search_history ainda não foi criada no Supabase. Execute supabase/schema.sql no SQL Editor.'
@@ -85,7 +87,7 @@ export default async function handler(req, res) {
   const { error } = await table.delete().eq('user_id', user.id);
   if (error) {
     console.error('Erro ao excluir search_history:', error);
-    const missingTable = /search_history|relation .* does not exist|schema cache/i.test(error.message || '');
+    const missingTable = /search_history|search_type|relation .* does not exist|schema cache/i.test(error.message || '');
     return res.status(500).json({
       error: missingTable
         ? 'A tabela search_history ainda não foi criada no Supabase. Execute supabase/schema.sql no SQL Editor.'
