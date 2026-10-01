@@ -30,7 +30,7 @@ O `index.html` contém apenas a estrutura da página. Os estilos próprios ficam
 
 A aplicação usa Supabase Auth. O botão de Google agora acompanha o estado real da sessão por `onAuthStateChange`, evitando que a tela volte para o estado “deslogado” depois do retorno do OAuth.
 
-O perfil (nome, foto, data de criação e total de pesquisas) aparece no lugar do botão do Google assim que a sessão é criada, e o histórico (pesquisas de vídeos e extrações de comentários) fica salvo na conta e disponível nas duas abas.
+Depois do login, o botão do Google some e aparece o perfil na barra lateral, junto com a aba **Meu Perfil**: página com dados da conta, estatísticas e o histórico completo (pesquisas de vídeos e extrações de comentários) com filtro, busca, reabertura e exclusão de itens.
 
 Para o histórico de pesquisas, execute **uma vez** o arquivo `supabase/schema.sql` no **Supabase Dashboard → SQL Editor**. Ele cria (ou atualiza, se já existir) a tabela `public.search_history`, com a coluna `search_type`,, o índice e as políticas de Row Level Security para cada usuário acessar apenas o próprio histórico.
 
